@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 MetaMachines LLC
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #define STACK_PTX_DEBUG
 #define STACK_PTX_IMPLEMENTATION
 #include <stack_ptx.h>

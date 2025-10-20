@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 MetaMachines LLC
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #ifndef PTX_INJECT_TYPES_PLUGIN_H
 #define PTX_INJECT_TYPES_PLUGIN_H
 

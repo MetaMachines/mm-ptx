@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 MetaMachines LLC
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <ptx_inject_types_plugin.h>
 
 #include <custom_types.h>

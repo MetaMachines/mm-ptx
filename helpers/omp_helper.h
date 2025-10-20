@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 MetaMachines LLC
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <omp.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))

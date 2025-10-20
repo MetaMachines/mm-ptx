@@ -9,6 +9,7 @@ This repo contains two systems: Stack PTX and PTX Inject. Both systems are c99 c
 * [Stack PTX Guide](STACK_PTX.md)
 
 ## Examples
+The examples in this repo contain their own copies of the CUDA kernel they use in the same directory. Most often CMake handles the processing of the PTX Inject annotated CUDA kernels and uses `incbin.h` to bring the PTX in to the kernel as a `static const char*` variable. The `.cu` file is there so the user can play with it without breaking the other examples, so feel free to experiment!
 
 - **PTX Inject Examples**
   - 📚 Overview: [examples/ptx_inject/README.md](examples/ptx_inject/README.md)
@@ -30,10 +31,26 @@ This repo contains two systems: Stack PTX and PTX Inject. Both systems are c99 c
 
 ## Installation
 
-```
+### Cloning the Repository
+
+The [`Cutlass/CuTe`](https://github.com/NVIDIA/cutlass) library is used as the **only submodule** in this repository, specifically for certain examples.
+
+#### To Build and Run All Examples (Including Submodules)
+Use the recursive clone option to fetch everything at once:
+
+```bash
 git clone --recursive https://github.com/MetaMachines/mm-ptx
 ```
 
+#### For a Basic Clone (Without Submodules)
+If you don't need the examples that rely on submodules:
+
+```bash
+git clone https://github.com/MetaMachines/mm-ptx
+```
+
+### Build
+---
 Install the `examples` and `tests` using CMake, from `mm-ptx` repo dir:
 ```
 mkdir build && cd build && cmake .. && make -j && cd ..

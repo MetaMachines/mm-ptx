@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2025 MetaMachines LLC
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #define PTX_INJECT_DEBUG
 #define PTX_INJECT_IMPLEMENTATION
 #include <ptx_inject.h>
