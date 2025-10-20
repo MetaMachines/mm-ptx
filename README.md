@@ -1,8 +1,9 @@
 # MetaMachines
+> PTX Inject and Stack PTX
 
 ## Overview
 
-This repo contains two systems: Stack PTX and PTX Inject. Both systems are c99 compliant single-file header-only libraries.
+This repo contains two systems: Stack PTX and PTX Inject. Both systems are C99 compliant single-file header-only libraries.
 
 ## Guides
 * [PTX Inject Guide](PTX_INJECT.md)
