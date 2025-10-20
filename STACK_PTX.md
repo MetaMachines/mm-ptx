@@ -240,15 +240,3 @@ This generates the C++ equivalent of the C generated header. It uses `constexpr`
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Citation
-If you use this software in your work, please cite it using the following BibTeX entry (generated from the [CITATION.cff](CITATION.cff) file):
-```bibtex
-@software{Durham_mm-stack_ptx_2025,
-  author       = {Durham, Charlie},
-  title        = {stack_ptx: PTX Inject},
-  version      = {0.1.0},
-  date-released = {2025-10-19},
-  url          = {https://github.com/MetaMachines/mm-ptx/stack_ptx.h}
-}
-```

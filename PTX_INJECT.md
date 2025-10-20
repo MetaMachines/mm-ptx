@@ -383,15 +383,3 @@ This custom data can also be used with the `ptxinject` CLI tool through a **plug
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Citation
-If you use this software in your work, please cite it using the following BibTeX entry (generated from the [CITATION.cff](CITATION.cff) file):
-```bibtex
-@software{Durham_mm-ptx_inject_2025,
-  author       = {Durham, Charlie},
-  title        = {ptx_inject: PTX Inject},
-  version      = {0.1.0},
-  date-released = {2025-10-19},
-  url          = {https://github.com/MetaMachines/mm-ptx/ptx_inject.h}
-}
-```
