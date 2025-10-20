@@ -89,12 +89,160 @@ Stack PTX code **can** be written by humans, but it is much better
 
 ## Tutorial / Explanation
 
+### Stacks
+  As the name Stack PTX implies Stack PTX uses stack data structures to store intermediate data while executing instructions and storing updates to it's AST while compiling. Instructions can push data on to stacks or pop data from stacks or do both.
+
 ### The Interface
-### Return Instruction
+Stack PTX exposes three functions:
+* **`stack_ptx_result_to_string`**: Just returns the string representation of a `StackPtxResult`.
+* **`stack_ptx_compile_workspace_size`**: Gives the user the amount of memory `stack_ptx_compile` will need to compile it's programs. This factors in various settings such as the number of stacks, the depth of each stack, the maximum number of elements to be stored in the AST, etc..
+* **`stack_ptx_compile`**: This is the workhorse of the Stack PTX system. The most important function parameters are `instructions`, `registers` and `requests`.
+
+## Instructions
+Stack PTX mostly relies on the `StackPtxInstruction` struct to descibe what to do with the list of instructions. This struct is designed to be fixed size at **8 bytes** or **64 bits**. Most data related to the compilation for the instruction is stored in these 8 bytes except for the string representations that end up in PTX code, such as "add.ftz.f32", "mul.ftz.f32", etc..
+
+The instructions are fixed size to make it easy to shuffle instruction lists around or assemble them on the fly or delete random elements out of the array without breaking anything. You should be able to randomly throw any set of instructions in the array of instructions and expect back valid PTX assembly code.
+
+### Return
+---
+Return is the simplest instruction. It's just a sentinel value signaling the end of execution for an array of instructions avoiding the need to pass a length to the `stack_ptx_compile` routine. It may be encoded with:
+```
+stack_ptx_encode_return
+```
+The instruction lists in [mm-ptx-py](https://github.com/MetaMachines/mm-ptx-py) don't need this instruction as it's automatically appended just before compiling.
+
 ### Constants
+---
+The simplest instruction that actually does something is the constant instruction which just pushes a constant value to the relevant stack. The constant the user declares is limited to 32 bits in size. This is because the constant is stored inside the instruction itself. The macros in for example `generated_headers/stack_ptx_default_generated_types.h` look like:
+```C
+stack_ptx_encode_constant_f32(1.0f)
+stack_ptx_encode_constant_u32(10)
+```
+Those instructions would push `1.0f` to the `f32` stack and `10` to the `u32` stack.
+
 ### Meta Instructions
-### Special Registers
+---
+Meta Instructions are inspired from the [Push](https://faculty.hampshire.edu/lspector/push.html) language by Prof [Lee Spector](https://faculty.hampshire.edu/lspector/). These instructions are meant to manipulate the Stacks during construction of the AST before the AST is compiled to PTX code. They perform various operations on their relevant stacks. If not enough values are present on the relevant stack or in the case of an indexed instruction, `meta_stack` is empty, the meta instruction is ignored. If an indexed meta instruction pops a value off of the `meta_stack` and it's too deep the instruction is also ignored.
+
+A runnable example for meta instructions is [examples/stack_ptx/03_meta_instructions](examples/stack_ptx/03_meta_instructions).
+#### Meta `constant`
+---
+This instruction just pushes an integer on to the special `meta_stack` to be used by other meta instructions that might require an integer as an input.
+```C
+stack_ptx_encode_meta_constant(2)
+```
+#### Meta `dup`
+---
+This instruction duplicates the top value of the relevant stack.
+```C
+stack_ptx_encode_meta_dup(STACK_PTX_STACK_TYPE_F32)
+```
+Would duplicate a value on the `F32` stack so there are now two of them at the top of the stack.
+#### Meta `yank_dup`
+---
+This instruction does the same as `dup` but pops an integer value off of the `meta_stack` to use for a depth parameter. It reaches that amount of depth into the relevant stack and duplicates that value to the top of the same stack leaving the original value untouched.
+```C
+stack_ptx_encode_meta_yank_dup(STACK_PTX_STACK_TYPE_F32)
+```
+#### Meta `swap`
+---
+This instruction takes the top two values of the relevant stack and swaps them.
+```C
+stack_ptx_encode_meta_swap(STACK_PTX_STACK_TYPE_U32)
+```
+#### Meta `swap_with`
+---
+This instruction is the same as `swap` but pops an integer value off of the `meta_stack` to use for a depth parameter. It reaches that amount of depth into the relevant stack and swaps it with the current value at the top of the stack.
+```C
+stack_ptx_encode_meta_swap_with(STACK_PTX_STACK_TYPE_U32)
+```
+#### Meta `replace`
+---
+This instructions is similar to `swap_with` it also pops an integer value off of the `meta_stack` to use as a depth parameter. However, instead of swapping it with the value of the top of the stack, it is replaced with the value at the top of the stack.
+```C
+stack_ptx_encode_meta_replace(STACK_PTX_STACK_TYPE_U32)
+```
+#### Meta `drop`
+---
+This instruction reads an integer value from the `meta_stack` and drops that many elements from the relevant stack.
+```C
+stack_ptx_encode_meta_drop(STACK_PTX_STACK_TYPE_U32)
+```
+#### Meta `rotate`
+---
+This instruction takes the element at the top of the stack and moves it two deep. `abc` becomes `bca`.
+```C
+stack_ptx_encode_meta_rotate(STACK_PTX_STACK_TYPE_U32)
+```
+#### Meta `reverse`
+---
+This instruction takes a given stack and reverses the order of the stack. `abcd` becomes `dcba`.
+```C
+stack_ptx_encode_meta_reverse(STACK_PTX_STACK_TYPE_U32)
+```
+
 ### Inputs
-### Requests
-### Routines
+Inputs are meant to push externally declared PTX registers on to the relevant stack. They require an index to identify them. This index is used to access their string register name passed in to `stack_ptx_compile` through the `const StackPtxRegister* 	registers` parameter. `StackPtxRegister` contains the registers string name and it's stack type. The index used to encode the Input StackPtxInstruction type is used to access that input's register data. For example:
+```C
+stack_ptx_encode_input(0),
+stack_ptx_encode_input(2)
+```
+When the above instructions are run the instructions will grab theirregister information from element 0 and element 2 of the `StackPtxRegister registers` array. It's common to use **enums** to maintain consistent naming for these indices. See [`examples/stack_ptx/00_simple/main.c`](examples/stack_ptx/00_simple/main.c).
+
+### Ptx Instruction
+Stack PTX PTX instruction encode the actual PTX instructions that will be encoding in the output PTX from running `stack_ptx_compile`. They're still **8 bytes** long, their payload contains all the information for which stacks to pop from and which stacks to push to. You can see how this is setup in [`type_descriptions/stack_ptx_desciptions.json`](type_descriptions/stack_ptx_descriptions.json). Each instruction can contain up to 4 input arguments and output up to 2 returns, per the [`PTX ISA`](https://docs.nvidia.com/cuda/parallel-thread-execution/) spec. These instructions can be encoded like:
+```C
+stack_ptx_encode_ptx_instruction_add_u32,
+stack_ptx_encode_ptx_instruction_mul_ftz_f32
+```
+From the descriptions `json` file you can see that `stack_ptx_encode_ptx_instruction_add_u32` reads two values from the `U32` stack and pushes one value back to the `U32` stack. `stack_ptx_encode_ptx_instruction_mul_ftz_f32` reads two values from the `F32` stack and pushes one value back to the `F32` stack.
+
+The instructions can get more complex because the values that describe their arg types aren't just stack types, they're arg types which can represent 4xF32 values respresented as vectors in PTX using braces like `{%a0, %a1, %a2, %a3}`. For example the `V4_F32` arg type means that whenever it's value is requested, the instruction should read 4 values from the `F32` stack. If used as a return it should push it's 4 vector elements to the `F32` stack. See [`examples/stack_ptx/06_mma/main.c`](examples/stack_ptx/06_mma/main.c) for an example using a tensor core instruction and [`examples/stack_ptx_inject/03_mma_sync`](examples/stack_ptx_inject/03_mma_sync) which runs an example using a tensor core instruction.
+
+### Special Registers
+Stack PTX Special Register instructions are similar to Stack PTX PTX Instructions in that they use arg types to describe their behavior. They exist to encode Special Register strings from the PTX ISA in to PTX. In [`type_descriptions/stack_ptx_desciptions.json`](type_descriptions/stack_ptx_descriptions.json) you can also see a section that describes the `special_registers`. For example `tid.x` will push it's value to the `U32` stack. `tid` will push it's 4 values to the `U32` stack because it uses the arg_type `V4_U32`. You will then find `tid.x`, `tid.y`, `tid.z` and `tid.w` in the output PTX representing the equivalent of `threadIdx.x`, `threadIdx.y`, etc.. in CUDA code. See [`examples/stack_ptx/04_special_registers/main.c`](examples/stack_ptx/04_special_registers/main.c).
+```C
+stack_ptx_encode_special_register_tid_x,
+stack_ptx_encode_special_register_tid
+```
 ### Store/Load
+Stack PTX Store and Load instructions are meant to manipulate the stack to store values from it to be used later. This can greatly help human programmers encode their intended behavior for Stack PTX. When `store` is run the value of the requested stack is popped and the index `store` is ran with is the location in a load/store array that the value is put at. Running `load` for the same index causes the value to reappear on the stack. `load` can be called multiple times to cause the same value to be pushed to the stack multiple times. If load for an index is run which never was stored to, the instruction is ignored.
+```C
+stack_ptx_encode_store(STACK_PTX_STACK_TYPE_F32, 0)
+stack_ptx_encode_load(0)
+```
+For an example see [`examples/stack_ptx/07_store_load`](examples/stack_ptx/07_store_load).
+
+## Routines
+Routines are passed into `stack_ptx_compile` as a parameter. Each routine in the `routines` array is another array of instructions similar to the `instructions` passed in to `stack_ptx_compile`. Routines allow an instruction in the `instructions` array to call another set of instructions for the given routine index. Routines can even call other routines. The struct `StackPtxCompilerInfo`contains a parameter called `max_frame_depth` which sets the maximum depth of routines calling other routines before returning. Similar to the instructions array, each routine must be terminated by a `return` instruction with `stack_ptx_encode_return`.
+```C
+stack_ptx_encode_routine(0)
+```
+For examples see:
+* [`examples/stack_ptx/01_routines`](examples/stack_ptx/01_routines)
+* [`examples/stack_ptx/02_routine_libraries`](examples/stack_ptx/02_routine_libraries)
+
+## Requests
+Requests are passed in to `stack_ptx_compile` as a parameter. Whereas `input` instructions allow external registers to appear as arguments in Stack PTX generated PTX assembly. Requests allow external registers to be set **by** instructions in Stack PTX generated PTX.
+
+Each request represents an index in the `const StackPtxRegister* 	registers` array. For each `request` in the `requests` array the relevant stack information is looked up from the `registers` array. The stack value associated with that `request` is popped and a `mov` instruction is generated setting the internal Stack PTX register to the string value of the external register.
+
+# Custom Types
+Stack PTX is designed to be unaware of Stack types and Arg types and specific PTX instructions, etc.. Stack PTX works primarily off of tables passed in to it to generate PTX assembly. This allows the user to customize their setup as they wish. 
+
+The default types used by the `examples` is at [`type_descriptions/stack_ptx_descriptions.json`](type_descriptions/stack_ptx_descriptions.json). A very simple description is at [`type_descriptions/stack_ptx_simple.json`](type_descriptions/stack_ptx_simple.json).
+
+To regenerate the [`generated_headers/stack_ptx_default_generated_types.h`](generated_headers/stack_ptx_default_generated_types.h) you can use the python script:
+```bash
+python ~/mm-ptx/tools/stack_ptx_generate_infos.py --input ~/mm-ptx/type_descriptions/stack_ptx_des
+    criptions.json --output ~/mm-ptx/generated_headers/stack_ptx_default_generated_types.h --lang c
+```
+This script will declare all the encoding macros for Stack PTX using the given types.
+
+# C++
+This project is written in C but is compliant with C++. All you need to change is to generate the C++ version of the generated headers instead of the C version. The C version makes use of macros and designated initializers to be able to declare `static const StackPtxInstruction[] = { .. };`. To generate the C++ headers specify `--lang cpp` instead of `--lang c`:
+```bash
+python ~/mm-ptx/tools/stack_ptx_generate_infos.py --input ~/mm-ptx/type_descriptions/stack_ptx_des
+    criptions.json --output ~/mm-ptx/generated_headers/stack_ptx_default_generated_types.hpp --lang cpp
+```
+This will generate the cpp equivalent to the c generated header. It uses `constexpr` to be able to do `static const StackPtxInstruction[] = { .. };`. It also includes convenient namespaces and enums.

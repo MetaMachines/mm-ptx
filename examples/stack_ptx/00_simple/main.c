@@ -38,7 +38,6 @@ static const size_t num_registers = STACK_PTX_ARRAY_NUM_ELEMS(registers);
 // perform some ptx operations on them. We push input_0 and input_1 on the stack as well 
 // so we should see these registers show up as operands in the output ptx.
 // stack_ptx_encode_return is mandatory at the end of the instructions list as a null terminator.
-#if 0
 static const StackPtxInstruction instructions[] = {
     stack_ptx_encode_input(REGISTER_INPUT_1),
     stack_ptx_encode_constant_u32(2),
@@ -47,16 +46,6 @@ static const StackPtxInstruction instructions[] = {
     stack_ptx_encode_ptx_instruction_add_u32,
     stack_ptx_encode_constant_f32(1.0f),
     stack_ptx_encode_constant_f32(2.0f),
-    stack_ptx_encode_ptx_instruction_add_ftz_f32,
-    stack_ptx_encode_return
-};
-#endif
-
-static const StackPtxInstruction instructions[] = {
-    stack_ptx_encode_constant_f32(1.0), 
-    stack_ptx_encode_constant_f32(2.0), 
-    stack_ptx_encode_ptx_instruction_mul_ftz_f32, 
-    stack_ptx_encode_constant_f32(0.2),
     stack_ptx_encode_ptx_instruction_add_ftz_f32,
     stack_ptx_encode_return
 };

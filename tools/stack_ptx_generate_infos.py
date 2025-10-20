@@ -509,7 +509,7 @@ constexpr StackPtxInstruction _encode_special_register(
 
     a("static const StackPtxArgTypeInfo arg_type_infos[] = {\n")
     for at in spec["arg_types"]:
-        a(f"    {{ static_cast<size_t>(StackType::{at['stack_type']}), {int(at['count'])} }},\n")
+        a(f"    {{ static_cast<size_t>(StackType::{at['stack_type']}), {int(at['num_vec_elems'])} }},\n")
     a("};\n\n")
 
     # constant encoders per stack type (heuristic)
