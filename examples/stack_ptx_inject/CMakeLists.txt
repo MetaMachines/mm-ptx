@@ -1,0 +1,5 @@
+add_subdirectory(00_simple)
+add_subdirectory(01_gemm)
+add_subdirectory(02_bulk_rand_gemm)
+add_subdirectory(03_mma_sync)
+add_subdirectory(04_half_type)

@@ -1,0 +1,7 @@
+{
+  "abi_version": 1,
+
+  "data_type_infos": [
+    { "name": "dog",  "register_type": "f32", "mov_postfix": "f32", "register_char": "f", "register_cast_str": "" }
+  ]
+}

@@ -1,0 +1,3 @@
+add_subdirectory(ptx_inject)
+add_subdirectory(stack_ptx)
+add_subdirectory(stack_ptx_inject)

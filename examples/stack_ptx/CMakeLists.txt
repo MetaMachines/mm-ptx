@@ -1,0 +1,8 @@
+add_subdirectory(00_simple)
+add_subdirectory(01_routines)
+add_subdirectory(02_routine_libraries)
+add_subdirectory(03_meta_instructions)
+add_subdirectory(04_special_registers)
+add_subdirectory(05_predicates)
+add_subdirectory(06_mma)
+add_subdirectory(07_store_load)

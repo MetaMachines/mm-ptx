@@ -1,0 +1,25 @@
+{
+  "abi_version": 1,
+
+  "stack_types": [
+    { "name": "F32",    "literal_prefix": "f32" },
+    { "name": "S32",    "literal_prefix": "s32" },
+    { "name": "U32",    "literal_prefix": "u32" },
+    { "name": "U32_2",  "literal_prefix": "u32" }
+  ],
+
+  "arg_types": [
+    { "name": "U32",    "stack_type": "U32",  "count": 1 },
+    { "name": "U32_2",  "stack_type": "U32_2",  "count": 1 }
+  ],
+
+  "instructions": [
+    { "ptx": "add.u32", "args": ["U32",   "U32"],   "rets": ["U32"]                             },
+    { "ptx": "add.u32", "args": ["U32_2", "U32_2"], "rets": ["U32_2"],  "aligned": "true", "display": "add.u32_2"  }
+  ],
+
+  "special_registers": [
+    { "ptx": "tid.x", "arg_type": "U32"                           },
+    { "ptx": "tid.x", "arg_type": "U32_2",  "display": "tid.x_2"  }
+  ]
+}
