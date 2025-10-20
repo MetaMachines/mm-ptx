@@ -40,12 +40,12 @@ mkdir build && cd build && cmake .. && make -j && cd ..
 ```
 Assuming that `mm-ptx` is cloned in the home directory:
 
-* To regenerate `generated_headers/ptx_inject_default_generated_types.h`:
+* To regenerate [`generated_headers/ptx_inject_default_generated_types.h`](generated_headers/ptx_inject_default_generated_types.h):
     ```
     python ~/mm-ptx/tools/ptx_inject_generate_infos.py --in ~/mm-ptx/type_descriptions/ptx_inject_defa
     ult_types.json --out ~/mm-ptx/generated_headers/ptx_inject_default_generated_types.h
     ```
-* To regenerate `generated_headers/stack_ptx_default_generated_types.h`:
+* To regenerate [`generated_headers/stack_ptx_default_generated_types.h`](generated_headers/stack_ptx_default_generated_types.h):
     ```
     python ~/mm-ptx/tools/stack_ptx_generate_infos.py --input ~/mm-ptx/type_descriptions/stack_ptx_des
     criptions.json --output ~/mm-ptx/generated_headers/stack_ptx_default_generated_types.h --lang c
