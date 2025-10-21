@@ -6,3 +6,5 @@ add_subdirectory(04_special_registers)
 add_subdirectory(05_predicates)
 add_subdirectory(06_mma)
 add_subdirectory(07_store_load)
+add_subdirectory(08_cpp)
+

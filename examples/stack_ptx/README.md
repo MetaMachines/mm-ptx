@@ -31,3 +31,6 @@ An example that shows the compilation of a complex `tf32` `mma.sync.aligned` ten
 
 ## 07_store_load
 An example that shows the usage of the `store` and `load` Stack PTX Instructions for storing/loading AST values from their stack.
+
+## 08_cpp
+An example using the stack_ptx_default_generated_types.hpp in c++
