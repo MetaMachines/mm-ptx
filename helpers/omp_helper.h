@@ -184,8 +184,6 @@ stack_ptx_bulk_compile_to_cubin(
                 )
             );
 
-            ptx_output_buffer[num_bytes_written-1] = '\0';
-
             char* start_of_name = strstr(ptx_output_buffer, search_string);
             if (start_of_name == NULL) {
                 assert( false );

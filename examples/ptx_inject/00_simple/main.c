@@ -24,7 +24,7 @@
 /* Use incbin to bring the code from 00_simple.cu, allows easy editing of cuda source
 *   is replaced with g_annotated_cuda_src_data
 */
-INCBIN(char, annotated_cuda_src, XSTRING(CUDA_KERNEL));
+INCTXT(annotated_cuda_src, XSTRING(CUDA_KERNEL));
 
 #define STUB_BUFFER_SIZE 1000000ull
 
@@ -72,7 +72,6 @@ main() {
             &num_sites
         )
     );
-    processed_cuda_buffer[num_bytes-1] = '\0';
     printf(
         "Processed cuda:\n"
         "---------------------------------------------\n"

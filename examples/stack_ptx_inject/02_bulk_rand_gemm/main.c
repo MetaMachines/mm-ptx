@@ -31,7 +31,7 @@
 // Use incbin to drag the kernel.ptx compiled from kernel.cu into this
 // compilation unit as a static string. kernel.cu was already processed by
 // the ptxinject binary and compiled with nvcc -ptx.
-INCBIN(char, annotated_ptx, XSTRING(PTX_KERNEL));
+INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
@@ -468,9 +468,6 @@ main() {
                 max_ptx_workspace_bytes = STACK_PTX_MAX(max_ptx_workspace_bytes, num_bytes_written);
                 // For posterity if anything else would follow.
                 current_workspace_buffer_idx += num_bytes_written + 1;
-
-                // INCBIN brings in the ptx without a null terminator so we'll terminate it here
-                ptx_output_buffer[num_bytes_written-1] = '\0';
 
                 // We also need to rename the kernel in this ptx so we can
                 // merge all of the sass into one cubin file. We named the 

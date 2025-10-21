@@ -25,7 +25,7 @@
 /* Use incbin to bring the code from kernel.ptx, allows easy editing of cuda source
 *   is replaced with g_annotated_ptx_data
 */
-INCBIN(char, annotated_ptx, XSTRING(PTX_KERNEL));
+INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
 
 #define STUB_BUFFER_SIZE 1000000ull
 
@@ -240,7 +240,6 @@ main() {
     // Take the stubs and use it to render new ptx
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 3, &num_bytes_written);
-    rendered_ptx[num_bytes_written-1] = '\0';
     time_end = clock();
     printf("MMA\n");
     printf("---------------------------------------------\n");
@@ -312,7 +311,6 @@ main() {
 
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 3, &num_bytes_written);
-    rendered_ptx[num_bytes_written-1] = '\0';
     time_end = clock();
     printf("L1\n");
     printf("---------------------------------------------\n");
@@ -384,7 +382,6 @@ main() {
 
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 3, &num_bytes_written);
-    rendered_ptx[num_bytes_written-1] = '\0';
     time_end = clock();
     printf("L2\n");
     printf("---------------------------------------------\n");

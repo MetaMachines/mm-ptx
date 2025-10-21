@@ -22,7 +22,7 @@
 /* Use incbin to bring the code from kernel.ptx, allows easy editing of cuda source
 *   is replaced with g_annotated_ptx_data
 */
-INCBIN(char, annotated_ptx, XSTRING(PTX_KERNEL));
+INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
 
 #define STUB_BUFFER_SIZE 1000000ull
 
@@ -80,7 +80,6 @@ main() {
     // We'll use the local helper this time
     size_t num_bytes_written;
     char* rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 1, &num_bytes_written);
-    rendered_ptx[num_bytes_written-1] = '\0';
 
     // We should now see the add instruction inside the ptx.
     printf(
