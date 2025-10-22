@@ -58,3 +58,5 @@ An example of running a mma.sync f32 tf32 instruction. Shows using convert instr
 
 ## 04_half_type
 An example of running both f16 and f16x2 types. Shows using the f16x2 as a datatype and then representing it as a vector of 2 f16 types.
+
+## 05_bulk_rand_gemm_packed
