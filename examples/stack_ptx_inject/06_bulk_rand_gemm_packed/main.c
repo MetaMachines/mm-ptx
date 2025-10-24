@@ -196,7 +196,7 @@ static const char* cuda_variable_names[] = {
 
 static const size_t num_registers = REGISTER_NUM_ENUMS;
 
-static const size_t num_kernels = 1024;
+static const size_t num_kernels = 128;
 
 int
 main() {
@@ -447,15 +447,24 @@ main() {
         printf("(%zu): %s\n", i, ptx_stub);
     }
 
-    ptxInjectCheck(
+    PtxInjectResult ptx_inject_result = 
         ptx_inject_render_ptx(
             ptx_inject, ptx_stubs,
             num_injects,
             buffer_ptr, 
             buffer_capacity,
             &bytes_written
-        )
-    );
+        );
+    
+    if (ptx_inject_result != PTX_INJECT_SUCCESS) {
+        if (ptx_inject_result == PTX_INJECT_ERROR_INSUFFICIENT_BUFFER) {
+            printf(
+                "Insufficient buffer for PTX Inject: Requested(%zu), Got(%zu)\n",
+                bytes_written, buffer_capacity
+            );
+        } 
+        ptxInjectCheck(ptx_inject_result);
+    }
 
     cuCheck( cuInit(0) );
     CUdevice cu_device;
@@ -510,7 +519,43 @@ main() {
     elapsed = difftime(end, start);  // Difference in seconds
 
     printf("Elapsed time: %.0f seconds\n", elapsed);
-    
+
+    size_t sass_image_size;
+    nvptxCheck( 
+        nvPTXCompilerGetCompiledProgramSize(
+            nvptx_compiler, 
+            &sass_image_size
+        )
+    );
+    void* sass_image = malloc(sass_image_size);
+
+    nvptxCheck(
+        nvPTXCompilerGetCompiledProgram(
+            nvptx_compiler, 
+            sass_image
+        )
+    );
+
+    CUcontext cu_context;
+    cuCheck( cuContextCreate(&cu_context, cu_device) );
+
+    CUmodule module;
+    cuCheck( cuModuleLoadDataEx(&module, sass_image, 0, NULL, NULL) );
+
+    unsigned int function_count;
+    cuCheck( cuModuleGetFunctionCount(&function_count, module) );
+
+    ASSERT( function_count == num_funcs );
+    CUfunction* functions = (CUfunction*)malloc(function_count * sizeof(CUfunction));
+
+    cuCheck( cuModuleEnumerateFunctions(functions, function_count, module) );
+
+    for (size_t i = 0; i < function_count; i++) {
+        const char* func_name;
+        cuCheck( cuFuncGetName(&func_name, functions[i]) );
+        printf("name: %s\n", func_name);
+    }
+
 #if 0
     StackPtxRegister registers[REGISTER_NUM_ENUMS];
     static const size_t num_registers = REGISTER_NUM_ENUMS;

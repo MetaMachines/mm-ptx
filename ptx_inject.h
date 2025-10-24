@@ -32,12 +32,12 @@
 
 #define PTX_INJECT_VERSION_MAJOR 0 //!< PTX Inject major version.
 #define PTX_INJECT_VERSION_MINOR 1 //!< PTX Inject minor version.
-#define PTX_INJECT_VERSION_PATCH 0 //!< PTX Inject patch version.
+#define PTX_INJECT_VERSION_PATCH 1 //!< PTX Inject patch version.
 
 /**
  * \brief String representation of the PTX Inject library version (e.g., "0.1.0").
  */
-#define PTX_INJECT_VERSION_STRING "0.1.0"
+#define PTX_INJECT_VERSION_STRING "0.1.1"
 
 #define PTX_INJECT_VERSION (PTX_INJECT_VERSION_MAJOR * 10000 + PTX_INJECT_VERSION_MINOR * 100 + PTX_INJECT_VERSION_PATCH)
 
@@ -719,6 +719,9 @@ _ptx_inject_snprintf_append(
 ) {
     va_list args;
     va_start(args, fmt);
+    if (buffer && buffer_size < *total_bytes_ref) {
+        buffer = NULL;
+    }
     int bytes = 
 		vsnprintf(
 			buffer ? buffer + *total_bytes_ref : NULL, 
