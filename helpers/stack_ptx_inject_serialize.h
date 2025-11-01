@@ -196,6 +196,38 @@ stack_ptx_registers_equal(
     size_t num_registers_y
 );
 
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+StackPtxInjectSerializeResult
+stack_ptx_requests_serialize(
+    const size_t* requests,
+    size_t num_requests,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+StackPtxInjectSerializeResult
+stack_ptx_requests_deserialize(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out,
+    size_t** requests_out,
+    size_t* num_requests_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+bool
+stack_ptx_requests_equal(
+    const size_t* requests_x,
+    size_t num_requests_x,
+    const size_t* requests_y,
+    size_t num_requests_y
+);
+
 #endif /* STACK_PTX_INJECT_SERIALIZE_H_INCLUDE */
 
 #ifdef STACK_PTX_INJECT_SERIALIZE_IMPLEMENTATION
@@ -342,7 +374,7 @@ ptx_inject_data_type_infos_serialize(
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
     }
 
-    uint8_t* p = (uint8_t*)buffer;
+    uint8_t* p = buffer;
 
     memcpy(p, &num_data_type_infos, sizeof(size_t));
     p += sizeof(size_t);
@@ -1238,7 +1270,6 @@ stack_ptx_registers_deserialize(
         _STACK_PTX_INJECT_SERIALIZE_ERROR( PTX_INJECT_ERROR_INSUFFICIENT_BUFFER );
     }
 
-    
     uint8_t* aligned_buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
     
     const uint8_t* p = wire;
@@ -1316,6 +1347,154 @@ stack_ptx_registers_equal(
         }
     }
     
+    return true;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+StackPtxInjectSerializeResult
+stack_ptx_requests_serialize(
+    const size_t* requests,
+    size_t num_requests,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out
+) {
+    if (!requests || !buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
+    }
+
+    size_t total_bytes = 0;
+    total_bytes += sizeof(size_t);
+    total_bytes += num_requests * sizeof(size_t);
+
+    *buffer_bytes_written_out = total_bytes;
+
+    if(!buffer) {
+        return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+    }
+
+    if (buffer_size < *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    uint8_t* p = buffer;
+
+    memcpy(p, &num_requests, sizeof(size_t));
+    p += sizeof(size_t);
+
+    memcpy(p, requests, num_requests * sizeof(size_t));
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+static
+inline
+StackPtxInjectSerializeResult
+_stack_ptx_requests_deserialize_size(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    size_t* buffer_bytes_written_out
+) {
+    size_t total_bytes = 0;
+    total_bytes += _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
+
+    const uint8_t* p = wire;
+    size_t num_requests;
+    memcpy(&num_requests, p, sizeof(size_t));
+    p += sizeof(size_t);
+    total_bytes += num_requests * sizeof(size_t);
+    p += num_requests * sizeof(size_t);
+
+    *wire_used_out = p - wire;
+    *buffer_bytes_written_out = total_bytes;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+StackPtxInjectSerializeResult
+stack_ptx_requests_deserialize(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out,
+    size_t** requests_out,
+    size_t* num_requests_out
+) {
+    if (!wire || !wire_used_out || !buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_requests_deserialize_size(
+            wire,
+            wire_size,
+            wire_used_out,
+            buffer_bytes_written_out
+        )
+    );
+
+    if (!buffer) {
+        return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+    }
+
+    if (buffer && buffer_size < *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( PTX_INJECT_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    uint8_t* aligned_buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
+    
+    const uint8_t* p = wire;
+
+    size_t num_requests;
+    memcpy(&num_requests, p, sizeof(size_t));
+    p += sizeof(size_t);
+
+    *requests_out = (size_t*)aligned_buffer;
+    memcpy(aligned_buffer, p, num_requests * sizeof(size_t));
+    for (size_t i = 0; i < num_requests; i++) {
+        printf("%zu\n", (*requests_out)[i]);
+    }
+    p += num_requests * sizeof(size_t);
+    uint8_t* deserialize_offset = aligned_buffer + num_requests * sizeof(size_t);
+
+    size_t wire_used = p - wire;
+    size_t buffer_bytes_written = deserialize_offset - aligned_buffer;
+
+    if (wire_used != *wire_used_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INTERNAL );
+    }
+
+    if (buffer_bytes_written != *buffer_bytes_written_out - _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INTERNAL );
+    }
+
+    *num_requests_out = num_requests;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+bool
+stack_ptx_requests_equal(
+    const size_t* requests_x,
+    size_t num_requests_x,
+    const size_t* requests_y,
+    size_t num_requests_y
+) {
+    if (num_requests_x != num_requests_y) {
+        return false;
+    }
+
+    for (size_t i = 0; i < num_requests_x; i++) {
+        if (requests_x[i] != requests_y[i]) {
+            return false;
+        }
+    }
+
     return true;
 }
 

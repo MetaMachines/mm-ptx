@@ -232,13 +232,11 @@ main() {
         stack_ptx_stack_info_print(deserialized_stack_info)
     );
 
-
     uint8_t* serialized_registers_buffer = NULL;
     size_t serialized_registers_buffer_size = 0;
     size_t serialized_registers_buffer_used = 0;
     uint8_t* deserialized_registers_buffer = NULL;
     size_t deserialized_registers_buffer_size = 0;
-
 
     StackPtxRegister registers[] = {
         { .name = "dog", .stack_idx = 1 },
@@ -305,6 +303,81 @@ main() {
             num_registers,
             deserialized_registers,
             deserialized_num_registers
+        )
+    );
+
+
+
+    uint8_t* serialized_requests_buffer = NULL;
+    size_t serialized_requests_buffer_size = 0;
+    size_t serialized_requests_buffer_used = 0;
+    uint8_t* deserialized_requests_buffer = NULL;
+    size_t deserialized_requests_buffer_size = 0;
+
+    size_t requests[] = {
+        10, 13, 22, 19
+    };
+    size_t num_requests = STACK_PTX_ARRAY_NUM_ELEMS(requests);
+
+    size_t* deserialized_requests = NULL;
+    size_t deserialized_num_requests;
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_requests_serialize(
+            requests,
+            num_requests,
+            serialized_requests_buffer,
+            serialized_requests_buffer_size,
+            &serialized_requests_buffer_size
+        )
+    );
+
+    serialized_requests_buffer = malloc(serialized_requests_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_requests_serialize(
+            requests,
+            num_requests,
+            serialized_requests_buffer,
+            serialized_requests_buffer_size,
+            &serialized_requests_buffer_size
+        )
+    );
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_requests_deserialize(
+            serialized_requests_buffer,
+            serialized_requests_buffer_size,
+            &serialized_requests_buffer_used,
+            deserialized_requests_buffer,
+            deserialized_requests_buffer_size,
+            &deserialized_requests_buffer_size,
+            &deserialized_requests,
+            &deserialized_num_requests
+        )
+    );
+
+    deserialized_requests_buffer = (uint8_t*)malloc(deserialized_requests_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_requests_deserialize(
+            serialized_requests_buffer,
+            serialized_requests_buffer_size,
+            &serialized_requests_buffer_used,
+            deserialized_requests_buffer,
+            deserialized_requests_buffer_size,
+            &deserialized_requests_buffer_size,
+            &deserialized_requests,
+            &deserialized_num_requests
+        )
+    );
+
+    ASSERT(
+        stack_ptx_requests_equal(
+            requests,
+            num_requests,
+            deserialized_requests,
+            deserialized_num_requests
         )
     );
 
