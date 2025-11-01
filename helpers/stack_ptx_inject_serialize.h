@@ -164,6 +164,38 @@ stack_ptx_stack_info_print(
     const StackPtxStackInfo* stack_info
 );
 
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+StackPtxInjectSerializeResult
+stack_ptx_registers_serialize(
+    const StackPtxRegister* registers,
+    size_t num_registers,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+StackPtxInjectSerializeResult
+stack_ptx_registers_deserialize(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out,
+    StackPtxRegister** registers_out,
+    size_t* num_registers_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+bool
+stack_ptx_registers_equal(
+    const StackPtxRegister* registers_x,
+    size_t num_registers_x,
+    const StackPtxRegister* registers_y,
+    size_t num_registers_y
+);
+
 #endif /* STACK_PTX_INJECT_SERIALIZE_H_INCLUDE */
 
 #ifdef STACK_PTX_INJECT_SERIALIZE_IMPLEMENTATION
@@ -281,51 +313,6 @@ _ptx_inject_serialize_data_type_infos_serialize_size(
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
 
-StackPtxInjectSerializeResult 
-_ptx_inject_serialize_data_type_infos_deserialize_size(
-    const uint8_t* serialized_data_type_infos, 
-    size_t serialized_data_type_infos_size,
-    size_t* buffer_size_out,
-    size_t* wire_used_out,
-    size_t* num_data_type_infos
-) {
-    if (serialized_data_type_infos_size < sizeof(size_t)) {
-        return STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT;
-    };
-
-    const uint8_t* wire = serialized_data_type_infos;
-    size_t wire_size = serialized_data_type_infos_size;
-
-    size_t count;
-    memcpy(&count, wire, sizeof(size_t));
-    
-    const uint8_t *p = wire + sizeof(size_t);
-    const uint8_t *end = wire + wire_size;
-
-    size_t needed = count * sizeof(PtxInjectDataTypeInfo);   // structs
-
-    for (size_t i = 0; i < count; ++i) {
-        for (int f = 0; f < 4; f++) {
-            const uint8_t *nul = memchr(p, '\0', end - p);
-            if (!nul) {
-                _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
-            };
-            needed += (nul - p) + 1;
-            p = nul + 1;
-        }
-        if (p >= end) {
-            _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
-        };
-        p++;
-    }
-    needed += _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
-
-    *buffer_size_out = needed;
-    *wire_used_out = p - wire;
-    *num_data_type_infos = count;
-    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
-}
-
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 ptx_inject_data_type_infos_serialize(
@@ -386,6 +373,45 @@ ptx_inject_data_type_infos_serialize(
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
 
+StackPtxInjectSerializeResult 
+_ptx_inject_serialize_data_type_infos_deserialize_size(
+    const uint8_t* wire, 
+    size_t wire_size,
+    size_t* wire_used_out,
+    size_t* buffer_size_out,
+    size_t* num_data_type_infos
+) {
+    size_t total_bytes = 0;
+
+    const uint8_t *p = wire;
+    const uint8_t *end = wire + wire_size;
+
+    memcpy(num_data_type_infos, p, sizeof(size_t));
+    p += sizeof(size_t);
+    
+    total_bytes += *num_data_type_infos * sizeof(PtxInjectDataTypeInfo);
+
+    for (size_t i = 0; i < *num_data_type_infos; ++i) {
+        for (int f = 0; f < 4; f++) {
+            const uint8_t *nul = memchr(p, '\0', end - p);
+            if (!nul) {
+                _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
+            };
+            total_bytes += (nul - p) + 1;
+            p = nul + 1;
+        }
+        if (p >= end) {
+            _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
+        };
+        p++;
+    }
+    total_bytes += _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
+
+    *buffer_size_out = total_bytes;
+    *wire_used_out = p - wire;
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 ptx_inject_data_type_infos_deserialize(
@@ -406,8 +432,8 @@ ptx_inject_data_type_infos_deserialize(
         _ptx_inject_serialize_data_type_infos_deserialize_size(
             wire,
             wire_size,
-            buffer_bytes_written_out,
             wire_used_out,
+            buffer_bytes_written_out,
             num_data_type_infos_out
         )
     );
@@ -1066,6 +1092,231 @@ stack_ptx_stack_info_print(
     }
 
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+static
+inline
+StackPtxInjectSerializeResult
+_stack_ptx_registers_serialize_size(
+    const StackPtxRegister* registers,
+    size_t num_registers,
+    size_t* buffer_bytes_written_out
+) {
+    size_t total = 0;
+    total += sizeof(size_t);
+    total += num_registers * sizeof(size_t);
+    for (size_t i = 0; i < num_registers; i++) {
+        const char* name = registers[i].name;
+        size_t name_size = strlen(name) + 1;
+        total += name_size;
+    }
+    *buffer_bytes_written_out = total;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+StackPtxInjectSerializeResult
+stack_ptx_registers_serialize(
+    const StackPtxRegister* registers,
+    size_t num_registers,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out
+) {
+    if (!registers || !buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_registers_serialize_size(
+            registers,
+            num_registers,
+            buffer_bytes_written_out
+        )
+    );
+
+    if (!buffer) {
+        return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+    }
+
+    if (buffer_size < *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    uint8_t* p = (uint8_t*)buffer;
+
+    memcpy(p, &num_registers, sizeof(size_t));
+    p += sizeof(size_t);
+
+    for (size_t i = 0; i < num_registers; i++) {
+        size_t stack_idx = registers[i].stack_idx;
+        memcpy(p, &stack_idx, sizeof(size_t));
+        p += sizeof(size_t);
+    }
+
+    for (size_t i = 0; i < num_registers; i++) {
+        const char* name = registers[i].name;
+        size_t name_size = strlen(name) + 1;
+        memcpy(p, name, name_size);
+        p += name_size;
+    }
+
+    size_t buffer_bytes_written = p - buffer;
+    if (buffer_bytes_written > buffer_size || buffer_bytes_written != *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+static
+inline
+StackPtxInjectSerializeResult
+_stack_ptx_registers_deserialize_size(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    size_t* buffer_bytes_written_out
+) {
+    size_t total_bytes = 0;
+    total_bytes += _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
+
+    const uint8_t *p = wire;
+    const uint8_t *end = wire + wire_size;
+
+    size_t num_registers;
+
+    memcpy(&num_registers, p, sizeof(size_t));
+    p += sizeof(size_t);
+
+    total_bytes += num_registers * sizeof(StackPtxRegister);
+    p += num_registers * sizeof(size_t);
+
+    for (size_t i = 0; i < num_registers; i++) {
+        size_t string_size = strlen(p) + 1;
+        p += string_size;
+        total_bytes += string_size;
+    }
+
+    *wire_used_out = p - wire;
+    *buffer_bytes_written_out = total_bytes;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+StackPtxInjectSerializeResult
+stack_ptx_registers_deserialize(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out,
+    StackPtxRegister** registers_out,
+    size_t* num_registers_out
+) {
+    if (!wire || !wire_used_out || !buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_registers_deserialize_size(
+            wire,
+            wire_size,
+            wire_used_out,
+            buffer_bytes_written_out
+        )
+    );
+
+    if (!buffer) {
+        return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+    }
+
+    if (buffer && buffer_size < *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( PTX_INJECT_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    
+    uint8_t* aligned_buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
+    
+    const uint8_t* p = wire;
+    
+    size_t num_registers;
+    memcpy(&num_registers, p, sizeof(size_t));
+    p += sizeof(size_t);
+
+    *registers_out = (StackPtxRegister*)aligned_buffer;
+    for (size_t i = 0; i < num_registers; i++) {
+        StackPtxRegister* reg = &(*registers_out)[i];
+        memcpy(&reg->stack_idx, p, sizeof(size_t));
+        p += sizeof(size_t);
+    }
+    
+    uint8_t* deserialize_offset = aligned_buffer + num_registers * sizeof(StackPtxRegister);
+    for (size_t i = 0; i < num_registers; i++) {
+        StackPtxRegister* reg = &(*registers_out)[i];
+        size_t name_size = strlen(p) + 1;
+        reg->name = deserialize_offset;
+        memcpy(deserialize_offset, p, sizeof(size_t));
+        p += name_size;
+        deserialize_offset += name_size;
+    }
+
+    size_t wire_used = p - wire;
+    size_t buffer_bytes_written = deserialize_offset - aligned_buffer;
+
+    if (wire_used != *wire_used_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INTERNAL );
+    }
+
+    if (buffer_bytes_written != *buffer_bytes_written_out - _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INTERNAL );
+    }
+
+    *num_registers_out = num_registers;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+bool
+stack_ptx_registers_equal(
+    const StackPtxRegister* registers_x,
+    size_t num_registers_x,
+    const StackPtxRegister* registers_y,
+    size_t num_registers_y
+) {
+    if (num_registers_x != num_registers_y) {
+        return false;
+    }
+
+    for (size_t i = 0; i < num_registers_x; i++) {
+        const StackPtxRegister* reg_x = &registers_x[i];
+        const StackPtxRegister* reg_y = &registers_y[i];
+        if (reg_x->stack_idx != reg_y->stack_idx) {
+            return false;
+        }
+
+        size_t name_len_x = strlen(reg_x->name);
+        size_t name_len_y = strlen(reg_y->name);
+
+        if (name_len_x != name_len_y) {
+            return false;
+        }
+
+        if (
+            strcmp(
+                reg_x->name,
+                reg_y->name
+            ) != 0
+        ) {
+            return false;
+        }
+    }
+    
+    return true;
 }
 
 #endif // STACK_PTX_INJECT_SERIALIZE_IMPLEMENTATION

@@ -232,4 +232,80 @@ main() {
         stack_ptx_stack_info_print(deserialized_stack_info)
     );
 
+
+    uint8_t* serialized_registers_buffer = NULL;
+    size_t serialized_registers_buffer_size = 0;
+    size_t serialized_registers_buffer_used = 0;
+    uint8_t* deserialized_registers_buffer = NULL;
+    size_t deserialized_registers_buffer_size = 0;
+
+
+    StackPtxRegister registers[] = {
+        { .name = "dog", .stack_idx = 1 },
+        { .name = "cat", .stack_idx = 2 },
+    };
+    size_t num_registers = STACK_PTX_ARRAY_NUM_ELEMS(registers);
+
+    StackPtxRegister* deserialized_registers = NULL;
+    size_t deserialized_num_registers;
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_registers_serialize(
+            registers,
+            num_registers,
+            serialized_registers_buffer,
+            serialized_registers_buffer_size,
+            &serialized_registers_buffer_size
+        )
+    );
+
+    serialized_registers_buffer = malloc(serialized_registers_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_registers_serialize(
+            registers,
+            num_registers,
+            serialized_registers_buffer,
+            serialized_registers_buffer_size,
+            &serialized_registers_buffer_size
+        )
+    );
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_registers_deserialize(
+            serialized_registers_buffer,
+            serialized_registers_buffer_size,
+            &serialized_registers_buffer_used,
+            deserialized_registers_buffer,
+            deserialized_registers_buffer_size,
+            &deserialized_registers_buffer_size,
+            &deserialized_registers,
+            &deserialized_num_registers
+        )
+    );
+
+    deserialized_registers_buffer = (uint8_t*)malloc(deserialized_registers_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_registers_deserialize(
+            serialized_registers_buffer,
+            serialized_registers_buffer_size,
+            &serialized_registers_buffer_used,
+            deserialized_registers_buffer,
+            deserialized_registers_buffer_size,
+            &deserialized_registers_buffer_size,
+            &deserialized_registers,
+            &deserialized_num_registers
+        )
+    );
+
+    ASSERT(
+        stack_ptx_registers_equal(
+            registers,
+            num_registers,
+            deserialized_registers,
+            deserialized_num_registers
+        )
+    );
+
 }
