@@ -199,8 +199,9 @@ stack_ptx_registers_equal(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_requests_serialize(
-    const size_t* requests,
-    size_t num_requests,
+    const size_t** request_stubs,
+    const size_t* request_stubs_sizes,
+    size_t num_request_stubs,
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out
@@ -215,18 +216,53 @@ stack_ptx_requests_deserialize(
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
-    size_t** requests_out,
-    size_t* num_requests_out
+    size_t*** requests_stubs_out,
+    size_t** request_stubs_sizes_out,
+    size_t* num_requests_stubs_out
 );
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 bool
 stack_ptx_requests_equal(
-    const size_t* requests_x,
-    size_t num_requests_x,
-    const size_t* requests_y,
-    size_t num_requests_y
+    const size_t** requests_stubs_x,
+    const size_t* request_stubs_sizes_x,
+    size_t num_request_stubs_x,
+    const size_t** requests_stubs_y,
+    const size_t* request_stubs_sizes_y,
+    size_t num_request_stubs_y
 );
+
+// STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+// StackPtxInjectSerializeResult
+// stack_ptx_instructions_serialize(
+//     const StackPtxInstruction** instructions,
+//     size_t num_instructions,
+//     uint8_t* buffer,
+//     size_t buffer_size,
+//     size_t* buffer_bytes_written_out
+// );
+
+// STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+// StackPtxInjectSerializeResult
+// stack_ptx_requests_deserialize(
+//     uint8_t* wire,
+//     size_t wire_size,
+//     size_t* wire_used_out,
+//     uint8_t* buffer,
+//     size_t buffer_size,
+//     size_t* buffer_bytes_written_out,
+//     size_t** requests_out,
+//     size_t* num_requests_out
+// );
+
+// STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+// bool
+// stack_ptx_requests_equal(
+//     const size_t* requests_x,
+//     size_t num_requests_x,
+//     const size_t* requests_y,
+//     size_t num_requests_y
+// );
 
 #endif /* STACK_PTX_INJECT_SERIALIZE_H_INCLUDE */
 
@@ -398,7 +434,8 @@ ptx_inject_data_type_infos_serialize(
         #undef WRITE_NT
     }
 
-    if (p - buffer > buffer_size || p - buffer != *buffer_bytes_written_out) {
+    size_t buffer_bytes_written = p - buffer;
+    if (buffer_bytes_written > buffer_size || buffer_bytes_written != *buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
     }
 
@@ -1350,26 +1387,52 @@ stack_ptx_registers_equal(
     return true;
 }
 
+static
+inline
+StackPtxInjectSerializeResult
+_stack_ptx_requests_serialize_size(
+    const size_t** request_stubs,
+    const size_t* request_stubs_sizes,
+    size_t num_request_stubs,
+    size_t* buffer_bytes_written_out
+) {
+    size_t total = 0;
+    total += sizeof(size_t);
+    total += num_request_stubs * sizeof(size_t);
+
+    for (size_t i = 0; i < num_request_stubs; i++) {
+        size_t request_stub_size = request_stubs_sizes[i];
+        total += request_stub_size * sizeof(size_t);
+    }
+
+    *buffer_bytes_written_out = total;
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_requests_serialize(
-    const size_t* requests,
-    size_t num_requests,
+    const size_t** request_stubs,
+    const size_t* request_stubs_sizes,
+    size_t num_request_stubs,
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out
 ) {
-    if (!requests || !buffer_bytes_written_out) {
+    if (!request_stubs || !request_stubs_sizes || !buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
 
-    size_t total_bytes = 0;
-    total_bytes += sizeof(size_t);
-    total_bytes += num_requests * sizeof(size_t);
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_requests_serialize_size(
+            request_stubs,
+            request_stubs_sizes,
+            num_request_stubs,
+            buffer_bytes_written_out
+        )
+    );
 
-    *buffer_bytes_written_out = total_bytes;
-
-    if(!buffer) {
+    if (!buffer) {
         return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
     }
 
@@ -1379,10 +1442,29 @@ stack_ptx_requests_serialize(
 
     uint8_t* p = buffer;
 
-    memcpy(p, &num_requests, sizeof(size_t));
+    memcpy(p, &num_request_stubs, sizeof(size_t));
     p += sizeof(size_t);
 
-    memcpy(p, requests, num_requests * sizeof(size_t));
+    for (size_t i = 0; i < num_request_stubs; i++) {
+        const size_t request_stub_size = request_stubs_sizes[i];
+        memcpy(p, &request_stub_size, sizeof(size_t));
+        p += sizeof(size_t);
+    }
+
+    for (size_t i = 0; i < num_request_stubs; i++) {
+        const size_t request_stub_size = request_stubs_sizes[i];
+        const size_t* request_stub = request_stubs[i];
+        for (size_t j = 0; j < request_stub_size; j++) {
+            size_t request = request_stub[j];
+            memcpy(p, &request, sizeof(size_t));
+            p += sizeof(size_t);
+        }
+    }
+
+    size_t buffer_bytes_written = p - buffer;
+    if (buffer_bytes_written > buffer_size || buffer_bytes_written != *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
 
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
@@ -1398,13 +1480,25 @@ _stack_ptx_requests_deserialize_size(
 ) {
     size_t total_bytes = 0;
     total_bytes += _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
-
+    
     const uint8_t* p = wire;
-    size_t num_requests;
-    memcpy(&num_requests, p, sizeof(size_t));
+
+    size_t num_requests_stubs;
+    memcpy(&num_requests_stubs, p, sizeof(size_t));
     p += sizeof(size_t);
-    total_bytes += num_requests * sizeof(size_t);
-    p += num_requests * sizeof(size_t);
+
+    total_bytes += num_requests_stubs * sizeof(size_t);
+    total_bytes += num_requests_stubs * sizeof(size_t*);
+    size_t total_requests = 0;
+    for (size_t i = 0; i < num_requests_stubs; i++) {
+        size_t request_stubs_size;
+        memcpy(&request_stubs_size, p, sizeof(size_t));
+        p += sizeof(size_t);
+        total_requests += request_stubs_size;
+    }
+
+    p += total_requests * sizeof(size_t);
+    total_bytes += total_requests * sizeof(size_t);
 
     *wire_used_out = p - wire;
     *buffer_bytes_written_out = total_bytes;
@@ -1421,8 +1515,9 @@ stack_ptx_requests_deserialize(
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
-    size_t** requests_out,
-    size_t* num_requests_out
+    size_t*** requests_stubs_out,
+    size_t** request_stubs_sizes_out,
+    size_t* num_requests_stubs_out
 ) {
     if (!wire || !wire_used_out || !buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
@@ -1442,24 +1537,39 @@ stack_ptx_requests_deserialize(
     }
 
     if (buffer && buffer_size < *buffer_bytes_written_out) {
-        _STACK_PTX_INJECT_SERIALIZE_ERROR( PTX_INJECT_ERROR_INSUFFICIENT_BUFFER );
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
     }
 
     uint8_t* aligned_buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
-    
-    const uint8_t* p = wire;
 
-    size_t num_requests;
-    memcpy(&num_requests, p, sizeof(size_t));
+    const uint8_t* p = wire;
+    size_t num_requests_stubs;
+    memcpy(&num_requests_stubs, p, sizeof(size_t));
     p += sizeof(size_t);
 
-    *requests_out = (size_t*)aligned_buffer;
-    memcpy(aligned_buffer, p, num_requests * sizeof(size_t));
-    for (size_t i = 0; i < num_requests; i++) {
-        printf("%zu\n", (*requests_out)[i]);
+    *num_requests_stubs_out = num_requests_stubs;
+
+    uint8_t* deserialize_offset = aligned_buffer;
+    *request_stubs_sizes_out = (size_t*)deserialize_offset;
+
+    memcpy(*request_stubs_sizes_out, p, num_requests_stubs * sizeof(size_t));
+    p += num_requests_stubs * sizeof(size_t);
+    deserialize_offset += num_requests_stubs * sizeof(size_t);
+
+    *requests_stubs_out = (size_t**)deserialize_offset;
+    deserialize_offset += num_requests_stubs * sizeof(size_t*);
+
+    size_t total_requests = 0;
+    for (size_t i = 0; i < num_requests_stubs; i++) {
+        (*requests_stubs_out)[i] = (size_t*)(deserialize_offset + total_requests * sizeof(size_t));
+        size_t* request_stub = (*requests_stubs_out)[i];
+
+        size_t request_stubs_size = (*request_stubs_sizes_out)[i];
+        total_requests += request_stubs_size;
     }
-    p += num_requests * sizeof(size_t);
-    uint8_t* deserialize_offset = aligned_buffer + num_requests * sizeof(size_t);
+    memcpy(deserialize_offset, p, total_requests * sizeof(size_t));
+    deserialize_offset += total_requests * sizeof(size_t);
+    p += total_requests * sizeof(size_t);
 
     size_t wire_used = p - wire;
     size_t buffer_bytes_written = deserialize_offset - aligned_buffer;
@@ -1472,26 +1582,37 @@ stack_ptx_requests_deserialize(
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INTERNAL );
     }
 
-    *num_requests_out = num_requests;
-
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 bool
 stack_ptx_requests_equal(
-    const size_t* requests_x,
-    size_t num_requests_x,
-    const size_t* requests_y,
-    size_t num_requests_y
+    const size_t** requests_stubs_x,
+    const size_t* request_stubs_sizes_x,
+    size_t num_request_stubs_x,
+    const size_t** requests_stubs_y,
+    const size_t* request_stubs_sizes_y,
+    size_t num_request_stubs_y
 ) {
-    if (num_requests_x != num_requests_y) {
+    if (num_request_stubs_x != num_request_stubs_y) {
         return false;
     }
 
-    for (size_t i = 0; i < num_requests_x; i++) {
-        if (requests_x[i] != requests_y[i]) {
+    for (size_t i = 0; i < num_request_stubs_x; i++) {
+        size_t request_stubs_size_x = request_stubs_sizes_x[i];
+        size_t request_stubs_size_y = request_stubs_sizes_y[i];
+        if (request_stubs_size_x != request_stubs_size_y) {
             return false;
+        }
+
+        const size_t* requests_stub_x = requests_stubs_x[i];
+        const size_t* requests_stub_y = requests_stubs_y[i];
+
+        for (size_t j = 0; j < request_stubs_size_x; j++) {
+            if (requests_stub_x[j] != requests_stub_y[j]) {
+                return false;
+            }
         }
     }
 

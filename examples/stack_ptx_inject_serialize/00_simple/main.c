@@ -306,26 +306,41 @@ main() {
         )
     );
 
-
-
     uint8_t* serialized_requests_buffer = NULL;
     size_t serialized_requests_buffer_size = 0;
     size_t serialized_requests_buffer_used = 0;
     uint8_t* deserialized_requests_buffer = NULL;
     size_t deserialized_requests_buffer_size = 0;
-
-    size_t requests[] = {
-        10, 13, 22, 19
+    
+    size_t requests_0[] = {
+        10, 13
     };
-    size_t num_requests = STACK_PTX_ARRAY_NUM_ELEMS(requests);
+    size_t num_requests_0 = STACK_PTX_ARRAY_NUM_ELEMS(requests_0);
 
-    size_t* deserialized_requests = NULL;
-    size_t deserialized_num_requests;
+    size_t requests_1[] = {
+        22, 19, 18
+    };
+    size_t num_requests_1 = STACK_PTX_ARRAY_NUM_ELEMS(requests_1);
+
+    const size_t* request_stubs[] = {
+        requests_0,
+        requests_1
+    };
+    size_t num_request_stubs = STACK_PTX_ARRAY_NUM_ELEMS(request_stubs);
+    size_t request_stubs_sizes[] = {
+        num_requests_0,
+        num_requests_1
+    };
+
+    size_t** deserialized_request_stubs = NULL;
+    size_t* deserialized_request_stubs_sizes = NULL;
+    size_t deserialized_num_request_stubs;
 
     stackPtxInjectSerializeCheck(
         stack_ptx_requests_serialize(
-            requests,
-            num_requests,
+            request_stubs,
+            request_stubs_sizes,
+            num_request_stubs,
             serialized_requests_buffer,
             serialized_requests_buffer_size,
             &serialized_requests_buffer_size
@@ -336,8 +351,9 @@ main() {
 
     stackPtxInjectSerializeCheck(
         stack_ptx_requests_serialize(
-            requests,
-            num_requests,
+            request_stubs,
+            request_stubs_sizes,
+            num_request_stubs,
             serialized_requests_buffer,
             serialized_requests_buffer_size,
             &serialized_requests_buffer_size
@@ -352,8 +368,9 @@ main() {
             deserialized_requests_buffer,
             deserialized_requests_buffer_size,
             &deserialized_requests_buffer_size,
-            &deserialized_requests,
-            &deserialized_num_requests
+            &deserialized_request_stubs,
+            &deserialized_request_stubs_sizes,
+            &deserialized_num_request_stubs
         )
     );
 
@@ -367,17 +384,20 @@ main() {
             deserialized_requests_buffer,
             deserialized_requests_buffer_size,
             &deserialized_requests_buffer_size,
-            &deserialized_requests,
-            &deserialized_num_requests
+            &deserialized_request_stubs,
+            &deserialized_request_stubs_sizes,
+            &deserialized_num_request_stubs
         )
     );
 
     ASSERT(
         stack_ptx_requests_equal(
-            requests,
-            num_requests,
-            deserialized_requests,
-            deserialized_num_requests
+            request_stubs,
+            request_stubs_sizes,
+            num_request_stubs,
+            (const size_t**)deserialized_request_stubs,
+            deserialized_request_stubs_sizes,
+            deserialized_num_request_stubs
         )
     );
 
