@@ -15,6 +15,16 @@
 
 #include <check_result_helper.h>
 
+#define INCBIN_SILENCE_BITCODE_WARNING
+#define INCBIN_STYLE INCBIN_STYLE_SNAKE
+#define INCBIN_PREFIX g_
+#include <incbin.h>
+
+#define STRING(x) #x
+#define XSTRING(x) STRING(x)
+
+INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
+
 static const StackPtxCompilerInfo stack_ptx_compiler_info = {
 	.max_ast_size = 100,
 	.max_ast_to_visit_stack_depth = 20,
@@ -29,6 +39,7 @@ compiler_serialize(
     size_t num_data_type_infos,
     const StackPtxCompilerInfo* compiler_info,
     const StackPtxStackInfo* stack_info,
+    const char* annotated_ptx,
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out
@@ -70,6 +81,12 @@ compiler_serialize(
     );
     total_bytes += buffer_offset;
 
+    size_t annotated_ptx_size = strlen(annotated_ptx) + 1;
+    if (buffer) {
+        memcpy(buffer + total_bytes, annotated_ptx, annotated_ptx_size);
+    }
+    total_bytes += annotated_ptx_size;
+
     *buffer_bytes_written_out = total_bytes;
 
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
@@ -86,7 +103,8 @@ compiler_deserialize(
     PtxInjectDataTypeInfo** data_type_infos_out,
     size_t* num_data_type_infos_out,
     StackPtxCompilerInfo** compiler_info_out,
-    StackPtxStackInfo** stack_info_out
+    StackPtxStackInfo** stack_info_out,
+    const char** annotated_ptx
 ) {
     if (!wire || !wire_used_out || !buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
@@ -96,6 +114,10 @@ compiler_deserialize(
     size_t total_wire_used = 0;
     size_t buffer_offset;
     size_t total_bytes = 0;
+
+    if (buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
 
     _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
         ptx_inject_data_type_infos_deserialize(
@@ -112,6 +134,10 @@ compiler_deserialize(
     total_wire_used += wire_used;
     total_bytes += buffer_offset;
 
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
     _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
         stack_ptx_compiler_info_deserialize(
             wire + total_wire_used,
@@ -126,6 +152,10 @@ compiler_deserialize(
     total_wire_used += wire_used;
     total_bytes += buffer_offset;
 
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
     _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
         stack_ptx_stack_info_deserialize(
             wire + total_wire_used,
@@ -139,6 +169,25 @@ compiler_deserialize(
     );
     total_wire_used += wire_used;
     total_bytes += buffer_offset;
+
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    size_t annotated_ptx_size = strlen(wire + total_wire_used) + 1;
+    if (buffer) {
+        if (annotated_ptx_size > buffer_size - total_bytes) {
+            _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+        }
+        *annotated_ptx = buffer + total_bytes;
+        memcpy(buffer + total_bytes, wire + total_wire_used, annotated_ptx_size);
+    }
+    total_wire_used += annotated_ptx_size;
+    total_bytes += annotated_ptx_size;
+
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
 
     *wire_used_out = total_wire_used;
     *buffer_bytes_written_out = total_bytes;
@@ -157,6 +206,7 @@ main() {
             num_ptx_inject_data_type_infos,
             &stack_ptx_compiler_info,
             &stack_ptx_stack_info,
+            g_annotated_ptx_data,
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_size
@@ -171,6 +221,7 @@ main() {
             num_ptx_inject_data_type_infos,
             &stack_ptx_compiler_info,
             &stack_ptx_stack_info,
+            g_annotated_ptx_data,
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_size
@@ -185,6 +236,7 @@ main() {
     size_t serialized_buffer_used;
     void* deserialized_buffer = NULL;
     size_t deserialized_buffer_size = 0;
+    const char* deserialized_annotated_ptx = NULL;
 
     stackPtxInjectSerializeCheck(
         compiler_deserialize(
@@ -197,7 +249,8 @@ main() {
             &deserialized_data_type_infos,
             &deserialized_num_data_type_infos,
             &deserialized_compiler_info,
-            &deserialized_stack_info
+            &deserialized_stack_info,
+            &deserialized_annotated_ptx
         )
     );
 
@@ -214,7 +267,8 @@ main() {
             &deserialized_data_type_infos,
             &deserialized_num_data_type_infos,
             &deserialized_compiler_info,
-            &deserialized_stack_info
+            &deserialized_stack_info,
+            &deserialized_annotated_ptx
         )
     );
 
@@ -241,4 +295,9 @@ main() {
         )
     );
 
+    printf("%s\n", deserialized_annotated_ptx);
+
+    free(serialized_buffer);
+    free(deserialized_buffer);
+    
 }

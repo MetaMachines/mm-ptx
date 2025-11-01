@@ -24,4 +24,3 @@ target_link_libraries(
     CUDA::nvptxcompiler_static
     m
 )
-    
