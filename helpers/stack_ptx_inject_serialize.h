@@ -58,7 +58,7 @@ stack_ptx_inject_serialize_result_to_string(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
-ptx_inject_data_type_info_serialize(
+ptx_inject_data_type_infos_serialize(
     const PtxInjectDataTypeInfo* data_type_infos,
     size_t num_data_type_infos,
     uint8_t* buffer,
@@ -68,7 +68,7 @@ ptx_inject_data_type_info_serialize(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
-ptx_inject_data_type_info_deserialize(
+ptx_inject_data_type_infos_deserialize(
     uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
@@ -80,8 +80,17 @@ ptx_inject_data_type_info_deserialize(
 );
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+bool
+ptx_inject_data_type_infos_equal(
+    const PtxInjectDataTypeInfo* data_type_infos_x,
+    size_t num_data_type_infos_x,
+    const PtxInjectDataTypeInfo* data_type_infos_y,
+    size_t num_data_type_infos_y
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
-ptx_inject_data_type_info_print(
+ptx_inject_data_type_infos_print(
     const PtxInjectDataTypeInfo* data_type_infos,
     size_t num_data_type_infos
 );
@@ -105,6 +114,13 @@ stack_ptx_compiler_info_deserialize(
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
     StackPtxCompilerInfo** compiler_info_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+bool
+stack_ptx_compiler_info_equal(
+    const StackPtxCompilerInfo* compiler_info_x,
+    const StackPtxCompilerInfo* compiler_info_y
 );
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
@@ -132,6 +148,13 @@ stack_ptx_stack_info_deserialize(
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
     StackPtxStackInfo** stack_info_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+bool
+stack_ptx_stack_info_equal(
+    const StackPtxStackInfo* stack_info_x,
+    const StackPtxStackInfo* stack_info_y
 );
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
@@ -206,10 +229,31 @@ stack_ptx_inject_serialize_result_to_string(
 static 
 inline 
 size_t 
-_ptx_inject_serialize_string_size(
+_stack_ptx_inject_serialize_string_size(
     const char *s
 ) {
     return s ? strlen(s) + 1 : 1;
+}
+
+static 
+inline 
+bool 
+_stack_ptx_inject_string_equal(
+    const char *s_x,
+    const char *s_y
+) {
+    size_t string_size_x = strlen(s_x);
+    size_t string_size_y = strlen(s_y);
+
+    if (string_size_x != string_size_y) {
+        return false;
+    }
+
+    if (strncmp(s_x, s_y, string_size_x) == 0) {
+        return true;
+    }
+
+    return false;
 }
 
 static 
@@ -224,11 +268,11 @@ _ptx_inject_serialize_data_type_infos_serialize_size(
 
     for (size_t i = 0; i < num_data_type_infos; ++i) {
         const PtxInjectDataTypeInfo *d = &data_type_infos[i];
-        total += _ptx_inject_serialize_string_size(d->name);
-        total += _ptx_inject_serialize_string_size(d->register_type);
-        total += _ptx_inject_serialize_string_size(d->mov_postfix);
+        total += _stack_ptx_inject_serialize_string_size(d->name);
+        total += _stack_ptx_inject_serialize_string_size(d->register_type);
+        total += _stack_ptx_inject_serialize_string_size(d->mov_postfix);
         total += sizeof(char);
-        total += _ptx_inject_serialize_string_size(d->register_cast_str);
+        total += _stack_ptx_inject_serialize_string_size(d->register_cast_str);
     }
 
     *buffer_size_out = total;
@@ -282,7 +326,7 @@ _ptx_inject_serialize_data_type_infos_deserialize_size(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
-ptx_inject_data_type_info_serialize(
+ptx_inject_data_type_infos_serialize(
     const PtxInjectDataTypeInfo* data_type_infos,
     size_t num_data_type_infos,
     uint8_t* buffer,
@@ -321,7 +365,7 @@ ptx_inject_data_type_info_serialize(
 
         #define WRITE_NT(field) do {                                    \
             const char *s = d->field;                                   \
-            size_t len = _ptx_inject_serialize_string_size(s);          \
+            size_t len = _stack_ptx_inject_serialize_string_size(s);    \
             if (s) memcpy(p, s, len); else *p = '\0';                   \
             p += len;                                                   \
         } while (0)
@@ -341,7 +385,7 @@ ptx_inject_data_type_info_serialize(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
-ptx_inject_data_type_info_deserialize(
+ptx_inject_data_type_infos_deserialize(
     uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
@@ -417,8 +461,38 @@ ptx_inject_data_type_info_deserialize(
 }
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+bool
+ptx_inject_data_type_infos_equal(
+    const PtxInjectDataTypeInfo* data_type_infos_x,
+    size_t num_data_type_infos_x,
+    const PtxInjectDataTypeInfo* data_type_infos_y,
+    size_t num_data_type_infos_y
+) {
+    if (num_data_type_infos_x != num_data_type_infos_y) {
+        return false;
+    }
+
+    for (size_t i = 0; i < num_data_type_infos_x; i++) {
+        const PtxInjectDataTypeInfo* data_type_info_x = &data_type_infos_x[i];
+        const PtxInjectDataTypeInfo* data_type_info_y = &data_type_infos_y[i];
+
+        if (
+            !_stack_ptx_inject_string_equal(data_type_info_x->name, data_type_info_y->name) ||
+            !_stack_ptx_inject_string_equal(data_type_info_x->mov_postfix, data_type_info_y->mov_postfix) ||
+            !_stack_ptx_inject_string_equal(data_type_info_x->register_type, data_type_info_y->register_type) ||
+            !_stack_ptx_inject_string_equal(data_type_info_x->register_cast_str, data_type_info_y->register_cast_str) ||
+            !(data_type_info_x->register_char == data_type_info_y->register_char)
+        ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
-ptx_inject_data_type_info_print(
+ptx_inject_data_type_infos_print(
     const PtxInjectDataTypeInfo* data_type_infos,
     size_t num_data_type_infos
 ) {
@@ -500,6 +574,24 @@ stack_ptx_compiler_info_deserialize(
     memcpy(buffer, wire, sizeof(StackPtxCompilerInfo));
 
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+bool
+stack_ptx_compiler_info_equal(
+    const StackPtxCompilerInfo* compiler_info_x,
+    const StackPtxCompilerInfo* compiler_info_y
+) {
+    if (
+        compiler_info_x->max_ast_size != compiler_info_y->max_ast_size ||
+        compiler_info_x->max_ast_to_visit_stack_depth != compiler_info_y->max_ast_to_visit_stack_depth ||
+        compiler_info_x->max_frame_depth != compiler_info_y->max_frame_depth ||
+        compiler_info_x->stack_size != compiler_info_y->stack_size ||
+        compiler_info_x->max_frame_depth != compiler_info_y->max_frame_depth
+    ) {
+        return false;
+    }
+    return true;
 }
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
@@ -777,6 +869,68 @@ stack_ptx_stack_info_deserialize(
     }
 
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+bool
+stack_ptx_stack_info_equal(
+    const StackPtxStackInfo* stack_info_x,
+    const StackPtxStackInfo* stack_info_y
+) {
+    if (
+        stack_info_x->num_ptx_instructions != stack_info_y->num_ptx_instructions ||
+        stack_info_x->num_special_registers != stack_info_y->num_special_registers ||
+        stack_info_x->num_stacks != stack_info_y->num_stacks ||
+        stack_info_x->num_arg_types != stack_info_y->num_arg_types
+    ) {
+        return false;
+    }
+
+    for (size_t i = 0; i < stack_info_x->num_ptx_instructions; i++) {
+        if (
+            strcmp(
+                stack_info_x->ptx_instruction_strings[i], 
+                stack_info_y->ptx_instruction_strings[i]
+            ) != 0
+        ) {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < stack_info_x->num_special_registers; i++) {
+        if (
+            strcmp(
+                stack_info_x->special_register_strings[i], 
+                stack_info_y->special_register_strings[i]
+            ) != 0
+        ) {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < stack_info_x->num_stacks; i++) {
+        if (
+            strcmp(
+                stack_info_x->stack_literal_prefixes[i], 
+                stack_info_y->stack_literal_prefixes[i]
+            ) != 0
+        ) {
+            return false;
+        }
+    }
+
+    if (
+        memcmp(
+            stack_info_x->arg_type_info, 
+            stack_info_y->arg_type_info,
+            stack_info_x->num_arg_types * sizeof(StackPtxArgTypeInfo)
+        ) != 0
+    ) {
+        return false;
+    }
+
+    return true;
+
 }
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF

@@ -21,7 +21,7 @@ main() {
     size_t serialized_data_type_info_buffer_size = 0;
 
     stackPtxInjectSerializeCheck(
-        ptx_inject_data_type_info_serialize(
+        ptx_inject_data_type_infos_serialize(
             ptx_inject_data_type_infos,
             num_ptx_inject_data_type_infos,
             serialized_data_type_info_buffer,
@@ -33,7 +33,7 @@ main() {
     serialized_data_type_info_buffer = malloc(serialized_data_type_info_buffer_size);
 
     stackPtxInjectSerializeCheck(
-        ptx_inject_data_type_info_serialize(
+        ptx_inject_data_type_infos_serialize(
             ptx_inject_data_type_infos,
             num_ptx_inject_data_type_infos,
             serialized_data_type_info_buffer,
@@ -50,7 +50,7 @@ main() {
     size_t deserialized_num_data_type_infos;
 
     stackPtxInjectSerializeCheck(
-        ptx_inject_data_type_info_deserialize(
+        ptx_inject_data_type_infos_deserialize(
             serialized_data_type_info_buffer,
             serialized_data_type_info_buffer_size,
             &serialized_data_type_info_buffer_used,
@@ -65,7 +65,7 @@ main() {
     deserialized_data_type_info_buffer = malloc(deserialized_data_type_info_buffer_size);
 
     stackPtxInjectSerializeCheck(
-        ptx_inject_data_type_info_deserialize(
+        ptx_inject_data_type_infos_deserialize(
             serialized_data_type_info_buffer,
             serialized_data_type_info_buffer_size,
             &serialized_data_type_info_buffer_used,
@@ -77,12 +77,21 @@ main() {
         )
     );
 
-    stackPtxInjectSerializeCheck(
-        ptx_inject_data_type_info_print(ptx_inject_data_type_infos, num_ptx_inject_data_type_infos)
+    assert( 
+        ptx_inject_data_type_infos_equal(
+            ptx_inject_data_type_infos,
+            num_ptx_inject_data_type_infos,
+            deserialized_data_type_infos,
+            deserialized_num_data_type_infos
+        )
     );
 
     stackPtxInjectSerializeCheck(
-        ptx_inject_data_type_info_print(deserialized_data_type_infos, deserialized_num_data_type_infos)
+        ptx_inject_data_type_infos_print(ptx_inject_data_type_infos, num_ptx_inject_data_type_infos)
+    );
+
+    stackPtxInjectSerializeCheck(
+        ptx_inject_data_type_infos_print(deserialized_data_type_infos, deserialized_num_data_type_infos)
     );
 
     uint8_t* serialized_compiler_info_buffer = NULL;
@@ -136,6 +145,13 @@ main() {
             deserialized_compiler_info_buffer_size,
             &deserialized_compiler_info_buffer_size,
             &deserialized_compiler_info
+        )
+    );
+
+    assert(
+        stack_ptx_compiler_info_equal(
+            &compiler_info,
+            deserialized_compiler_info
         )
     );
 
@@ -198,6 +214,13 @@ main() {
             deserialized_stack_info_buffer_size,
             &deserialized_stack_info_buffer_size,
             &deserialized_stack_info
+        )
+    );
+
+    assert(
+        stack_ptx_stack_info_equal(
+            &stack_ptx_stack_info,
+            deserialized_stack_info
         )
     );
 
