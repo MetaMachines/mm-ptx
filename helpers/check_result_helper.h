@@ -52,6 +52,17 @@
         }                                                                                       \
     } while(0)
 
+#define stackPtxInjectSerializeCheck(ans)                                                       \
+    do {                                                                                        \
+        StackPtxResult _result = (ans);                                                         \
+        if (_result != STACK_PTX_INJECT_SERIALIZE_SUCCESS) {                                    \
+            const char *error_name = stack_ptx_inject_serialize_result_to_string(_result);      \
+            fprintf(stderr, "stackPtxCheck: %s \n  %s %d\n", error_name, __FILE__, __LINE__);   \
+            assert(0);                                                                          \
+            exit(1);                                                                            \
+        }                                                                                       \
+    } while(0)
+
 #define cuCheck(ans)                                                                            \
     do {                                                                                        \
         CUresult _result = (ans);                                                               \

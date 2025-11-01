@@ -13,71 +13,77 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include <check_result_helper.h>
+
 int
 main() {
-    void* serialized_buffer = NULL;
-    size_t serialized_buffer_size = 0;
-    StackPtxInjectSerializeResult result;
+    void* serialized_data_type_info_buffer = NULL;
+    size_t serialized_data_type_info_buffer_size = 0;
 
-    static const size_t s = sizeof(PtxInjectDataTypeInfo);
-
-    result = 
+    stackPtxInjectSerializeCheck(
         ptx_inject_data_type_info_serialize(
             ptx_inject_data_type_infos,
             num_ptx_inject_data_type_infos,
-            serialized_buffer,
-            serialized_buffer_size,
-            &serialized_buffer_size
-        );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
+            serialized_data_type_info_buffer,
+            serialized_data_type_info_buffer_size,
+            &serialized_data_type_info_buffer_size
+        )
+    );
 
-    serialized_buffer = malloc(serialized_buffer_size);
+    serialized_data_type_info_buffer = malloc(serialized_data_type_info_buffer_size);
 
-    result = 
+    stackPtxInjectSerializeCheck(
         ptx_inject_data_type_info_serialize(
             ptx_inject_data_type_infos,
             num_ptx_inject_data_type_infos,
-            serialized_buffer,
-            serialized_buffer_size,
-            &serialized_buffer_size
-        );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
+            serialized_data_type_info_buffer,
+            serialized_data_type_info_buffer_size,
+            &serialized_data_type_info_buffer_size
+        )
+    );
 
-    size_t serialized_buffer_used;
-    void* deserialized_buffer = NULL;
-    size_t deserialized_buffer_size = 0;
+    size_t serialized_data_type_info_buffer_used;
+    void* deserialized_data_type_info_buffer = NULL;
+    size_t deserialized_data_type_info_buffer_size = 0;
 
     PtxInjectDataTypeInfo* deserialized_data_type_infos;
     size_t deserialized_num_data_type_infos;
 
-    result = ptx_inject_data_type_info_deserialize(
-        serialized_buffer,
-        serialized_buffer_size,
-        &serialized_buffer_used,
-        deserialized_buffer,
-        deserialized_buffer_size,
-        &deserialized_buffer_size,
-        &deserialized_data_type_infos,
-        &deserialized_num_data_type_infos
+    stackPtxInjectSerializeCheck(
+        ptx_inject_data_type_info_deserialize(
+            serialized_data_type_info_buffer,
+            serialized_data_type_info_buffer_size,
+            &serialized_data_type_info_buffer_used,
+            deserialized_data_type_info_buffer,
+            deserialized_data_type_info_buffer_size,
+            &deserialized_data_type_info_buffer_size,
+            &deserialized_data_type_infos,
+            &deserialized_num_data_type_infos
+        )
     );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
 
-    deserialized_buffer = malloc(deserialized_buffer_size);
+    deserialized_data_type_info_buffer = malloc(deserialized_data_type_info_buffer_size);
 
-    result = ptx_inject_data_type_info_deserialize(
-        serialized_buffer,
-        serialized_buffer_size,
-        &serialized_buffer_used,
-        deserialized_buffer,
-        deserialized_buffer_size,
-        &deserialized_buffer_size,
-        &deserialized_data_type_infos,
-        &deserialized_num_data_type_infos
+    stackPtxInjectSerializeCheck(
+        ptx_inject_data_type_info_deserialize(
+            serialized_data_type_info_buffer,
+            serialized_data_type_info_buffer_size,
+            &serialized_data_type_info_buffer_used,
+            deserialized_data_type_info_buffer,
+            deserialized_data_type_info_buffer_size,
+            &deserialized_data_type_info_buffer_size,
+            &deserialized_data_type_infos,
+            &deserialized_num_data_type_infos
+        )
     );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
 
-    ptx_inject_data_type_info_print(ptx_inject_data_type_infos, num_ptx_inject_data_type_infos);
-    ptx_inject_data_type_info_print(deserialized_data_type_infos, deserialized_num_data_type_infos);
+    stackPtxInjectSerializeCheck(
+        ptx_inject_data_type_info_print(ptx_inject_data_type_infos, num_ptx_inject_data_type_infos)
+    );
+
+    stackPtxInjectSerializeCheck(
+        ptx_inject_data_type_info_print(deserialized_data_type_infos, deserialized_num_data_type_infos)
+    );
 
     uint8_t* serialized_compiler_info_buffer = NULL;
     size_t serialized_compiler_info_buffer_size = 0;
@@ -85,50 +91,122 @@ main() {
     uint8_t* deserialized_compiler_info_buffer = NULL;
     size_t deserialized_compiler_info_buffer_size = 0;
 
-    result = stack_ptx_compiler_info_serialize(
-        &compiler_info,
-        serialized_compiler_info_buffer,
-        serialized_compiler_info_buffer_size,
-        &serialized_compiler_info_buffer_size
+    stackPtxInjectSerializeCheck(
+        stack_ptx_compiler_info_serialize(
+            &compiler_info,
+            serialized_compiler_info_buffer,
+            serialized_compiler_info_buffer_size,
+            &serialized_compiler_info_buffer_size
+        )
     );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
 
     serialized_compiler_info_buffer = (uint8_t*)malloc(serialized_compiler_info_buffer_size);
 
-    result = stack_ptx_compiler_info_serialize(
-        &compiler_info,
-        serialized_compiler_info_buffer,
-        serialized_compiler_info_buffer_size,
-        &serialized_compiler_info_buffer_size
+    stackPtxInjectSerializeCheck(
+        stack_ptx_compiler_info_serialize(
+            &compiler_info,
+            serialized_compiler_info_buffer,
+            serialized_compiler_info_buffer_size,
+            &serialized_compiler_info_buffer_size
+        )
     );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
 
     StackPtxCompilerInfo* deserialized_compiler_info = NULL;
 
-    result = stack_ptx_compiler_info_deserialize(
-        serialized_compiler_info_buffer,
-        serialized_compiler_info_buffer_size,
-        &serialized_compiler_info_buffer_used,
-        deserialized_compiler_info_buffer,
-        deserialized_compiler_info_buffer_size,
-        &deserialized_compiler_info_buffer_size,
-        &deserialized_compiler_info
+    stackPtxInjectSerializeCheck(
+        stack_ptx_compiler_info_deserialize(
+            serialized_compiler_info_buffer,
+            serialized_compiler_info_buffer_size,
+            &serialized_compiler_info_buffer_used,
+            deserialized_compiler_info_buffer,
+            deserialized_compiler_info_buffer_size,
+            &deserialized_compiler_info_buffer_size,
+            &deserialized_compiler_info
+        )
     );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
 
     deserialized_compiler_info_buffer = (uint8_t*)malloc(deserialized_compiler_info_buffer_size);
 
-    result = stack_ptx_compiler_info_deserialize(
-        serialized_compiler_info_buffer,
-        serialized_compiler_info_buffer_size,
-        &serialized_compiler_info_buffer_used,
-        deserialized_compiler_info_buffer,
-        deserialized_compiler_info_buffer_size,
-        &deserialized_compiler_info_buffer_size,
-        &deserialized_compiler_info
+    stackPtxInjectSerializeCheck(
+        stack_ptx_compiler_info_deserialize(
+            serialized_compiler_info_buffer,
+            serialized_compiler_info_buffer_size,
+            &serialized_compiler_info_buffer_used,
+            deserialized_compiler_info_buffer,
+            deserialized_compiler_info_buffer_size,
+            &deserialized_compiler_info_buffer_size,
+            &deserialized_compiler_info
+        )
     );
-    assert(result == STACK_PTX_INJECT_SERIALIZE_SUCCESS );
 
-    stack_ptx_compiler_info_print(&compiler_info);
-    stack_ptx_compiler_info_print(deserialized_compiler_info);
+    stackPtxInjectSerializeCheck(
+        stack_ptx_compiler_info_print(&compiler_info)
+    );
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_compiler_info_print(deserialized_compiler_info)
+    );
+
+    uint8_t* serialized_stack_info_buffer = NULL;
+    size_t serialized_stack_info_buffer_size = 0;
+    size_t serialized_stack_info_buffer_used = 0;
+    uint8_t* deserialized_stack_info_buffer = NULL;
+    size_t deserialized_stack_info_buffer_size = 0;
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_stack_info_serialize(
+            &stack_ptx_stack_info,
+            serialized_stack_info_buffer,
+            serialized_stack_info_buffer_size,
+            &serialized_stack_info_buffer_size
+        )
+    );
+
+    serialized_stack_info_buffer = (uint8_t*)malloc(serialized_stack_info_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_stack_info_serialize(
+            &stack_ptx_stack_info,
+            serialized_stack_info_buffer,
+            serialized_stack_info_buffer_size,
+            &serialized_stack_info_buffer_size
+        )
+    );
+
+    StackPtxStackInfo* deserialized_stack_info = NULL;
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_stack_info_deserialize(
+            serialized_stack_info_buffer,
+            serialized_stack_info_buffer_size,
+            &serialized_stack_info_buffer_used,
+            deserialized_stack_info_buffer,
+            deserialized_stack_info_buffer_size,
+            &deserialized_stack_info_buffer_size,
+            &deserialized_stack_info
+        )
+    );
+
+    deserialized_stack_info_buffer = (uint8_t*)malloc(deserialized_stack_info_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_stack_info_deserialize(
+            serialized_stack_info_buffer,
+            serialized_stack_info_buffer_size,
+            &serialized_stack_info_buffer_used,
+            deserialized_stack_info_buffer,
+            deserialized_stack_info_buffer_size,
+            &deserialized_stack_info_buffer_size,
+            &deserialized_stack_info
+        )
+    );
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_stack_info_print(&stack_ptx_stack_info)
+    );
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_stack_info_print(deserialized_stack_info)
+    );
+
 }

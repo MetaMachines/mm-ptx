@@ -110,7 +110,7 @@ stack_ptx_compiler_info_deserialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_compiler_info_print(
-    const StackPtxCompilerInfo* compiler_info_out
+    const StackPtxCompilerInfo* compiler_info
 );
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
@@ -131,13 +131,13 @@ stack_ptx_stack_info_deserialize(
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
-    StackPtxCompilerInfo* stack_info_out
+    StackPtxStackInfo** stack_info_out
 );
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_stack_info_print(
-    const StackPtxStackInfo* stack_info_out
+    const StackPtxStackInfo* stack_info
 );
 
 #endif /* STACK_PTX_INJECT_SERIALIZE_H_INCLUDE */
@@ -220,14 +220,14 @@ _ptx_inject_serialize_data_type_infos_serialize_size(
     size_t num_data_type_infos,
     size_t* buffer_size_out
 ) {
-    size_t total = sizeof(size_t);   // count
+    size_t total = sizeof(size_t);
 
     for (size_t i = 0; i < num_data_type_infos; ++i) {
         const PtxInjectDataTypeInfo *d = &data_type_infos[i];
         total += _ptx_inject_serialize_string_size(d->name);
         total += _ptx_inject_serialize_string_size(d->register_type);
         total += _ptx_inject_serialize_string_size(d->mov_postfix);
-        total += sizeof(char);                 // register_char
+        total += sizeof(char);
         total += _ptx_inject_serialize_string_size(d->register_cast_str);
     }
 
@@ -425,7 +425,7 @@ ptx_inject_data_type_info_print(
     if (!data_type_infos) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
-    
+
     printf("PTX Inject Data Type Infos:\n");
     for(size_t i = 0; i < num_data_type_infos; i++) {
         const PtxInjectDataTypeInfo* data_type_info = &data_type_infos[i];
@@ -505,9 +505,9 @@ stack_ptx_compiler_info_deserialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_compiler_info_print(
-    const StackPtxCompilerInfo* compiler_info_out
+    const StackPtxCompilerInfo* compiler_info
 ) {
-    if (!compiler_info_out) {
+    if (!compiler_info) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
 
@@ -518,12 +518,87 @@ stack_ptx_compiler_info_print(
         "\tStack Size: %zu\n"
         "\tMax Frame Depth: %zu\n"
         "\tStore Size: %zu\n",
-        compiler_info_out->max_ast_size,
-        compiler_info_out->max_ast_to_visit_stack_depth,
-        compiler_info_out->stack_size,
-        compiler_info_out->max_frame_depth,
-        compiler_info_out->store_size
+        compiler_info->max_ast_size,
+        compiler_info->max_ast_to_visit_stack_depth,
+        compiler_info->stack_size,
+        compiler_info->max_frame_depth,
+        compiler_info->store_size
     );
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+static
+inline
+size_t
+_stack_ptx_measure_string_array_size(
+    const char* const* strings,
+    size_t num_strings
+) {
+    size_t total = 0;
+    for (size_t i = 0; i < num_strings; i++) {
+        const char* string = strings[i];
+        total += strlen(string) + 1;
+    }
+    return total;
+}
+
+static
+inline
+StackPtxInjectSerializeResult
+_stack_ptx_serialize_string_array(
+    const char* const* strings,
+    size_t num_strings,
+    uint8_t* buffer,
+    size_t* buffer_bytes_written_out
+) {
+    uint8_t* p = (uint8_t*)buffer;
+
+    memcpy(p, &num_strings, sizeof(size_t));
+    p += sizeof(size_t);
+
+    size_t total = 0;
+    for (size_t i = 0; i < num_strings; i++) {
+        const char* string = strings[i];
+        size_t string_size = strlen(string) + 1;
+        memcpy(p, string, string_size);
+        p += string_size;
+    }
+
+    *buffer_bytes_written_out = p - buffer;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+StackPtxInjectSerializeResult
+_stack_ptx_stack_info_serialize_size(
+    const StackPtxStackInfo* stack_info_ref,
+    size_t* buffer_size_out
+) {
+    size_t total = 0;
+    total += sizeof(StackPtxStackInfo);
+
+    total += 
+        _stack_ptx_measure_string_array_size(
+            stack_info_ref->ptx_instruction_strings, 
+            stack_info_ref->num_ptx_instructions
+        );
+
+    total += 
+        _stack_ptx_measure_string_array_size(
+            stack_info_ref->special_register_strings, 
+            stack_info_ref->num_special_registers
+        );
+    
+    total += 
+        _stack_ptx_measure_string_array_size(
+            stack_info_ref->stack_literal_prefixes, 
+            stack_info_ref->num_stacks
+        );
+
+    total += stack_info_ref->num_arg_types * sizeof(StackPtxArgTypeInfo);
+
+    *buffer_size_out = total;
+
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
 
@@ -538,6 +613,64 @@ stack_ptx_stack_info_serialize(
     if (!stack_info_ref || !buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_stack_info_serialize_size(
+            stack_info_ref, 
+            buffer_bytes_written_out
+        )
+    );
+
+    if (!buffer) {
+        return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+    }
+
+    if (buffer_size < *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    uint8_t* p = (uint8_t*)buffer;
+    size_t buffer_offset = 0;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_serialize_string_array(
+            stack_info_ref->ptx_instruction_strings, 
+            stack_info_ref->num_ptx_instructions,
+            p,
+            &buffer_offset
+        )
+    );
+    p += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_serialize_string_array(
+            stack_info_ref->special_register_strings, 
+            stack_info_ref->num_special_registers,
+            p,
+            &buffer_offset
+        )
+    );
+    p += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_serialize_string_array(
+            stack_info_ref->stack_literal_prefixes, 
+            stack_info_ref->num_stacks,
+            p,
+            &buffer_offset
+        )
+    );
+    p += buffer_offset;
+
+    memcpy(p, &stack_info_ref->num_arg_types, sizeof(size_t));
+    p += sizeof(size_t);
+
+    for (size_t i = 0; i < stack_info_ref->num_arg_types; i++) {
+        const StackPtxArgTypeInfo* arg_type_info = &stack_info_ref->arg_type_info[i];
+        memcpy(p, arg_type_info, sizeof(StackPtxArgTypeInfo));
+        p += sizeof(StackPtxArgTypeInfo);
+    }
+
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
 
@@ -550,22 +683,137 @@ stack_ptx_stack_info_deserialize(
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
-    StackPtxCompilerInfo* stack_info_out
+    StackPtxStackInfo** stack_info_out
 ) {
     if (!wire || !wire_used_out || !buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
+
+    *wire_used_out = sizeof(StackPtxCompilerInfo);
+    *buffer_bytes_written_out = sizeof(StackPtxCompilerInfo) + _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
+
+    if (!buffer) {
+        return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+    }
+
+    if (buffer && buffer_size < *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
+
+    const uint8_t* p = wire;
+
+    uint8_t* deserialize_offset = buffer + sizeof(StackPtxStackInfo);
+
+    *stack_info_out = (StackPtxStackInfo*)buffer;
+
+    {
+        size_t num_ptx_instructions;
+        memcpy(&num_ptx_instructions, p, sizeof(size_t));
+        p += sizeof(size_t);
+        (*stack_info_out)->ptx_instruction_strings = (const char *const *)deserialize_offset;
+        (*stack_info_out)->num_ptx_instructions = num_ptx_instructions;
+
+        char** deserialize_ptrs_offset = (char**)deserialize_offset;
+        char* deserialize_string_offset = (uint8_t*)deserialize_offset + num_ptx_instructions * sizeof(const char* const *);
+        for (size_t i = 0; i < num_ptx_instructions; i++) {
+            deserialize_ptrs_offset[i] = (uint8_t*)deserialize_string_offset;
+            size_t string_size = strlen(p) + 1;
+            memcpy(deserialize_string_offset, p, string_size);
+            deserialize_string_offset += string_size;
+            p += string_size;
+        }
+        deserialize_offset = deserialize_string_offset;
+    }
+
+    {
+        size_t num_special_registers;
+        memcpy(&num_special_registers, p, sizeof(size_t));
+        p += sizeof(size_t);
+        (*stack_info_out)->special_register_strings = (const char *const *)deserialize_offset;
+        (*stack_info_out)->num_special_registers = num_special_registers;
+
+        char** deserialize_ptrs_offset = (char**)deserialize_offset;
+        char* deserialize_string_offset = (uint8_t*)deserialize_offset + num_special_registers * sizeof(const char* const *);
+        for (size_t i = 0; i < num_special_registers; i++) {
+            deserialize_ptrs_offset[i] = (uint8_t*)deserialize_string_offset;
+            size_t string_size = strlen(p) + 1;
+            memcpy(deserialize_string_offset, p, string_size);
+            deserialize_string_offset += string_size;
+            p += string_size;
+        }
+        deserialize_offset = deserialize_string_offset;
+    }
+
+    {
+        size_t num_stacks;
+        memcpy(&num_stacks, p, sizeof(size_t));
+        p += sizeof(size_t);
+        (*stack_info_out)->stack_literal_prefixes = (const char *const *)deserialize_offset;
+        (*stack_info_out)->num_stacks = num_stacks;
+
+        char** deserialize_ptrs_offset = (char**)deserialize_offset;
+        char* deserialize_string_offset = (uint8_t*)deserialize_offset + num_stacks * sizeof(const char* const *);
+        for (size_t i = 0; i < num_stacks; i++) {
+            deserialize_ptrs_offset[i] = (uint8_t*)deserialize_string_offset;
+            size_t string_size = strlen(p) + 1;
+            memcpy(deserialize_string_offset, p, string_size);
+            deserialize_string_offset += string_size;
+            p += string_size;
+        }
+        deserialize_offset = deserialize_string_offset;
+    }
+
+    {
+        size_t num_arg_types;
+        memcpy(&num_arg_types, p, sizeof(size_t));
+        p += sizeof(size_t);
+
+        (*stack_info_out)->arg_type_info = (StackPtxArgTypeInfo*)deserialize_offset;
+        (*stack_info_out)->num_arg_types = num_arg_types;
+
+        memcpy(deserialize_offset, p, num_arg_types * sizeof(StackPtxArgTypeInfo));
+    }
+
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_stack_info_print(
-    const StackPtxStackInfo* stack_info_out
+    const StackPtxStackInfo* stack_info
 ) {
-    if (!stack_info_out) {
+    if (!stack_info) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
+    printf("Stack PTX Stack Info:\n");
+
+    printf("\tPTX Instructions:\n");
+    for (size_t i = 0; i < stack_info->num_ptx_instructions; i++) {
+        printf("\t\t%s\n", stack_info->ptx_instruction_strings[i]);
+    }
+
+    printf("\tSpecial Registers:\n");
+    for (size_t i = 0; i < stack_info->num_special_registers; i++) {
+        printf("\t\t%s\n", stack_info->special_register_strings[i]);
+    }
+
+    printf("\tLiteral Prefixes:\n");
+    for (size_t i = 0; i < stack_info->num_stacks; i++) {
+        printf("\t\t%s\n", stack_info->stack_literal_prefixes[i]);
+    }
+
+    printf("\tArg Type Info:\n");
+    for (size_t i = 0; i < stack_info->num_arg_types; i++) {
+        const StackPtxArgTypeInfo* arg_type_info = &stack_info->arg_type_info[i];
+        printf(
+            "\t\t%zu : %zu\n", 
+            arg_type_info->stack_idx,
+            arg_type_info->num_vec_elems
+        );
+    }
+
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
 
