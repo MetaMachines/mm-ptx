@@ -77,7 +77,7 @@ main() {
         )
     );
 
-    assert( 
+    ASSERT( 
         ptx_inject_data_type_infos_equal(
             ptx_inject_data_type_infos,
             num_ptx_inject_data_type_infos,
@@ -148,7 +148,7 @@ main() {
         )
     );
 
-    assert(
+    ASSERT(
         stack_ptx_compiler_info_equal(
             &compiler_info,
             deserialized_compiler_info
@@ -217,7 +217,7 @@ main() {
         )
     );
 
-    assert(
+    ASSERT(
         stack_ptx_stack_info_equal(
             &stack_ptx_stack_info,
             deserialized_stack_info

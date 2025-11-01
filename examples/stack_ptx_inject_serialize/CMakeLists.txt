@@ -1,1 +1,2 @@
 add_subdirectory(00_simple)
+add_subdirectory(01_buffer_compile)
