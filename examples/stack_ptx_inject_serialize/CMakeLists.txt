@@ -1,0 +1,3 @@
+add_subdirectory(00_simple)
+add_subdirectory(01_buffer_compile)
+add_subdirectory(02_buffer_compile_struct)

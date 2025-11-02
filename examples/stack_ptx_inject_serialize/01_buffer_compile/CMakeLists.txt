@@ -1,4 +1,4 @@
-project(stack_ptx_inject_00_simple)
+project(stack_ptx_inject_serialize_01_buffer_compile)
 
 set(PROCESSED_CUDA ${CMAKE_CURRENT_BINARY_DIR}/processed_cuda/kernel.cu)
 set(ANNOTATED_PTX ${CMAKE_CURRENT_BINARY_DIR}/annotated_ptx/kernel.ptx)
