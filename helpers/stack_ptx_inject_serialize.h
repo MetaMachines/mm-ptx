@@ -55,7 +55,53 @@ typedef struct {
     unsigned int device_capability_major;
     unsigned int device_capability_minor;
     size_t execution_limit;
-} StackPtxExtra;
+} StackPtxExtraInfo;
+
+typedef struct {
+    const PtxInjectDataTypeInfo* data_type_infos;
+    size_t num_data_type_infos;
+    const char* annotated_ptx;
+
+    const StackPtxCompilerInfo* compiler_info;
+    const StackPtxStackInfo* stack_info;
+    StackPtxExtraInfo* extra;
+
+    const StackPtxRegister* registers;
+    size_t num_registers;
+
+    const size_t* const* request_stubs;
+    const size_t*        request_stub_sizes;
+    size_t               num_request_stubs;
+} StackPtxInjectCompilerStateSerialize;
+
+typedef struct {
+    PtxInjectDataTypeInfo* data_type_infos;
+    size_t num_data_type_infos;
+    char* annotated_ptx;
+
+    StackPtxCompilerInfo* compiler_info;
+    StackPtxStackInfo* stack_info;
+    StackPtxExtraInfo* extra;
+
+    StackPtxRegister* registers;
+    size_t num_registers;
+
+    size_t** request_stubs;
+    size_t*  request_stub_sizes;
+    size_t   num_request_stubs;
+} StackPtxInjectCompilerStateDeserialize;
+
+typedef struct {
+    const StackPtxInstruction* const* instruction_stubs;
+    const size_t*                     instruction_stub_sizes;
+    size_t                            num_instruction_stubs;
+} StackPtxInjectCompilerInputSerialize;
+
+typedef struct {
+    StackPtxInstruction** instruction_stubs;
+    size_t*               instruction_stub_sizes;
+    size_t                num_instruction_stubs;
+} StackPtxInjectCompilerInputDeserialize;
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC 
 const char* 
@@ -272,7 +318,7 @@ stack_ptx_instructions_equal(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
-stack_ptx_ptx_serialize(
+ptx_inject_ptx_serialize(
     const char* ptx,
     uint8_t* buffer,
     size_t buffer_size,
@@ -281,7 +327,7 @@ stack_ptx_ptx_serialize(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
-stack_ptx_ptx_deserialize(
+ptx_inject_ptx_deserialize(
     uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
@@ -293,7 +339,7 @@ stack_ptx_ptx_deserialize(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 bool
-stack_ptx_ptx_equal(
+ptx_inject_ptx_equal(
     const char* ptx_x,
     const char* ptx_y
 );
@@ -301,7 +347,7 @@ stack_ptx_ptx_equal(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_extra_serialize(
-    const StackPtxExtra* extra_ref,
+    const StackPtxExtraInfo* extra_ref,
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out
@@ -316,14 +362,42 @@ stack_ptx_extra_deserialize(
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
-    StackPtxExtra** extra_out
+    StackPtxExtraInfo** extra_out
 );
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 bool
 stack_ptx_extra_equal(
-    const StackPtxExtra* extra_x,
-    const StackPtxExtra* extra_y
+    const StackPtxExtraInfo* extra_x,
+    const StackPtxExtraInfo* extra_y
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+StackPtxInjectSerializeResult
+stack_ptx_inject_compiler_state_serialize(
+    const StackPtxInjectCompilerStateSerialize* compiler_state,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+StackPtxInjectSerializeResult
+stack_ptx_inject_compiler_state_deserialize(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out,
+    StackPtxInjectCompilerStateDeserialize** compiler_state_out
+);
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
+bool
+stack_ptx_inject_compiler_state_equal(
+    const StackPtxInjectCompilerStateSerialize* compiler_state_x,
+    StackPtxInjectCompilerStateDeserialize* compiler_state_y
 );
 
 #endif /* STACK_PTX_INJECT_SERIALIZE_H_INCLUDE */
@@ -343,7 +417,7 @@ stack_ptx_extra_equal(
 #include <assert.h>
 #define _STACK_PTX_INJECT_SERIALIZE_ERROR(ans)                                                                      \
     do {                                                                                            \
-        PtxInjectResult _result = (ans);                                                            \
+        StackPtxInjectSerializeResult _result = (ans);                                                            \
         const char* error_name = stack_ptx_inject_serialize_result_to_string(_result);                              \
         fprintf(stderr, "STACK_PTX_INJECT_SERIALIZE_ERROR: %s \n  %s %d\n", error_name, __FILE__, __LINE__);        \
         assert(0);                                                                                  \
@@ -352,7 +426,7 @@ stack_ptx_extra_equal(
 
 #define _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(ans)                                                                  \
     do {                                                                                            \
-        PtxInjectResult _result = (ans);                                                            \
+        StackPtxInjectSerializeResult _result = (ans);                                                            \
         if (_result != STACK_PTX_INJECT_SERIALIZE_SUCCESS) {                                                        \
             const char* error_name = stack_ptx_inject_serialize_result_to_string(_result);                          \
             fprintf(stderr, "STACK_PTX_INJECT_SERIALIZE_CHECK: %s \n  %s %d\n", error_name, __FILE__, __LINE__);    \
@@ -364,13 +438,13 @@ stack_ptx_extra_equal(
 #else
 #define _STACK_PTX_INJECT_SERIALIZE_ERROR(ans)                              \
     do {                                                    \
-        PtxInjectResult _result = (ans);                    \
+        StackPtxInjectSerializeResult _result = (ans);                    \
         return _result;                                     \
     } while(0);
 
 #define _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(ans)                          \
     do {                                                    \
-        PtxInjectResult _result = (ans);                    \
+        StackPtxInjectSerializeResult _result = (ans);                    \
         if (_result != STACK_PTX_INJECT_SERIALIZE_SUCCESS) return _result;  \
     } while(0);
 #endif // STACK_PTX_INJECT_SERIALIZE_DEBUG
@@ -509,20 +583,20 @@ _ptx_inject_serialize_data_type_infos_deserialize_size(
     const uint8_t* wire, 
     size_t wire_size,
     size_t* wire_used_out,
-    size_t* buffer_size_out,
-    size_t* num_data_type_infos
+    size_t* buffer_size_out
 ) {
     size_t total_bytes = 0;
 
     const uint8_t *p = wire;
     const uint8_t *end = wire + wire_size;
 
-    memcpy(num_data_type_infos, p, sizeof(size_t));
+    size_t num_data_type_infos;
+    memcpy(&num_data_type_infos, p, sizeof(size_t));
     p += sizeof(size_t);
     
-    total_bytes += *num_data_type_infos * sizeof(PtxInjectDataTypeInfo);
+    total_bytes += num_data_type_infos * sizeof(PtxInjectDataTypeInfo);
 
-    for (size_t i = 0; i < *num_data_type_infos; ++i) {
+    for (size_t i = 0; i < num_data_type_infos; ++i) {
         for (int f = 0; f < 4; f++) {
             const uint8_t *nul = memchr(p, '\0', end - p);
             if (!nul) {
@@ -564,8 +638,7 @@ ptx_inject_data_type_infos_deserialize(
             wire,
             wire_size,
             wire_used_out,
-            buffer_bytes_written_out,
-            num_data_type_infos_out
+            buffer_bytes_written_out
         )
     );
     
@@ -577,12 +650,13 @@ ptx_inject_data_type_infos_deserialize(
         _STACK_PTX_INJECT_SERIALIZE_ERROR( PTX_INJECT_ERROR_INSUFFICIENT_BUFFER );
     }
 
-    size_t num_data_type_infos = *num_data_type_infos_out;
-
     uint8_t* aligned_buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
 
     const uint8_t* p = wire;
+    size_t num_data_type_infos;
+    memcpy(&num_data_type_infos, p, sizeof(size_t));
     p += sizeof(size_t);
+    *num_data_type_infos_out = num_data_type_infos;
 
     char* string_deserialize_offset = aligned_buffer + num_data_type_infos * sizeof(PtxInjectDataTypeInfo);
 
@@ -1922,7 +1996,7 @@ stack_ptx_instructions_equal(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
-stack_ptx_ptx_serialize(
+ptx_inject_ptx_serialize(
     const char* ptx,
     uint8_t* buffer,
     size_t buffer_size,
@@ -1959,7 +2033,7 @@ stack_ptx_ptx_serialize(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
-stack_ptx_ptx_deserialize(
+ptx_inject_ptx_deserialize(
     uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
@@ -2012,7 +2086,7 @@ stack_ptx_ptx_deserialize(
 
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 bool
-stack_ptx_ptx_equal(
+ptx_inject_ptx_equal(
     const char* ptx_x,
     const char* ptx_y
 ) {
@@ -2033,7 +2107,7 @@ stack_ptx_ptx_equal(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_extra_serialize(
-    const StackPtxExtra* extra_ref,
+    const StackPtxExtraInfo* extra_ref,
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out
@@ -2042,7 +2116,7 @@ stack_ptx_extra_serialize(
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
 
-    *buffer_bytes_written_out = sizeof(StackPtxExtra);
+    *buffer_bytes_written_out = sizeof(StackPtxExtraInfo);
 
     if(!buffer) {
         return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
@@ -2052,7 +2126,7 @@ stack_ptx_extra_serialize(
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
     }
 
-    memcpy(buffer, extra_ref, sizeof(StackPtxExtra));
+    memcpy(buffer, extra_ref, sizeof(StackPtxExtraInfo));
 
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
@@ -2066,14 +2140,14 @@ stack_ptx_extra_deserialize(
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
-    StackPtxExtra** extra_out
+    StackPtxExtraInfo** extra_out
 ) {
     if (!wire || !wire_used_out || !buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
     }
 
-    *wire_used_out = sizeof(StackPtxExtra);
-    *buffer_bytes_written_out = sizeof(StackPtxExtra) + _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
+    *wire_used_out = sizeof(StackPtxExtraInfo);
+    *buffer_bytes_written_out = sizeof(StackPtxExtraInfo) + _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
 
     if (!buffer) {
         return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
@@ -2085,8 +2159,8 @@ stack_ptx_extra_deserialize(
 
     buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
 
-    *extra_out = (StackPtxExtra*)buffer;
-    memcpy(buffer, wire, sizeof(StackPtxExtra));
+    *extra_out = (StackPtxExtraInfo*)buffer;
+    memcpy(buffer, wire, sizeof(StackPtxExtraInfo));
 
     return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
 }
@@ -2094,8 +2168,8 @@ stack_ptx_extra_deserialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 bool
 stack_ptx_extra_equal(
-    const StackPtxExtra* extra_x,
-    const StackPtxExtra* extra_y
+    const StackPtxExtraInfo* extra_x,
+    const StackPtxExtraInfo* extra_y
 ) {
     if (
         extra_x->device_capability_major != extra_y->device_capability_major ||
@@ -2104,6 +2178,467 @@ stack_ptx_extra_equal(
     ) {
         return false;
     }
+    return true;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+StackPtxInjectSerializeResult
+stack_ptx_inject_compiler_state_serialize(
+    const StackPtxInjectCompilerStateSerialize* compiler_state,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out
+) {
+    *buffer_bytes_written_out = 0;
+
+    size_t total_bytes = 0;
+    size_t buffer_offset = 0;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        ptx_inject_data_type_infos_serialize(
+            compiler_state->data_type_infos,
+            compiler_state->num_data_type_infos,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        ptx_inject_ptx_serialize(
+            compiler_state->annotated_ptx,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_compiler_info_serialize(
+            compiler_state->compiler_info,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_stack_info_serialize(
+            compiler_state->stack_info,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_extra_serialize(
+            compiler_state->extra,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_registers_serialize(
+            compiler_state->registers,
+            compiler_state->num_registers,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_requests_serialize(
+            compiler_state->request_stubs,
+            compiler_state->request_stub_sizes,
+            compiler_state->num_request_stubs,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    *buffer_bytes_written_out = total_bytes;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+static
+inline
+StackPtxInjectSerializeResult
+_stack_ptx_inject_compiler_state_deserialize_size(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    size_t* buffer_bytes_written_out
+) {
+    size_t total_bytes = 0;
+    total_bytes += _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT;
+    total_bytes += sizeof(StackPtxInjectCompilerStateDeserialize);
+
+    const uint8_t* p = wire;
+
+    size_t wire_used;
+    size_t total_wire_used = 0;
+    size_t buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        ptx_inject_data_type_infos_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            NULL,
+            0,
+            &buffer_offset,
+            NULL,
+            NULL
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        ptx_inject_ptx_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            NULL,
+            0,
+            &buffer_offset,
+            NULL
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_compiler_info_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            NULL,
+            0,
+            &buffer_offset,
+            NULL
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_stack_info_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            NULL,
+            0,
+            &buffer_offset,
+            NULL
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_extra_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            NULL,
+            0,
+            &buffer_offset,
+            NULL
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_registers_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            NULL,
+            0,
+            &buffer_offset,
+            NULL,
+            NULL
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_requests_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            NULL,
+            0,
+            &buffer_offset,
+            NULL,
+            NULL,
+            NULL
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    *wire_used_out = total_wire_used;
+    *buffer_bytes_written_out = total_bytes;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+StackPtxInjectSerializeResult
+stack_ptx_inject_compiler_state_deserialize(
+    uint8_t* wire,
+    size_t wire_size,
+    size_t* wire_used_out,
+    uint8_t* buffer,
+    size_t buffer_size,
+    size_t* buffer_bytes_written_out,
+    StackPtxInjectCompilerStateDeserialize** compiler_state_out
+) {
+    if (!wire || !wire_used_out || !buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        _stack_ptx_inject_compiler_state_deserialize_size(
+            wire,
+            wire_size,
+            wire_used_out,
+            buffer_bytes_written_out
+        )
+    );
+
+    if (!buffer) {
+        return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+    }
+
+    if (buffer && buffer_size < *buffer_bytes_written_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    size_t wire_used;
+    size_t total_wire_used = 0;
+    size_t buffer_offset;
+    size_t total_bytes = 0;
+
+    uint8_t* aligned_buffer = (uint8_t*)_STACK_PTX_INJECT_SERIALIZE_ALIGNMENT_UP((uintptr_t)buffer, _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT);
+
+    *compiler_state_out = (StackPtxInjectCompilerStateDeserialize*)(aligned_buffer + total_bytes);
+    total_bytes += sizeof(StackPtxInjectCompilerStateDeserialize);
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        ptx_inject_data_type_infos_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? aligned_buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            &(*compiler_state_out)->data_type_infos,
+            &(*compiler_state_out)->num_data_type_infos
+        )
+    );
+    total_bytes += buffer_offset;
+    total_wire_used += wire_used;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        ptx_inject_ptx_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? aligned_buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            &(*compiler_state_out)->annotated_ptx
+        )
+    );
+    total_bytes += buffer_offset;
+    total_wire_used += wire_used;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_compiler_info_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? aligned_buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            &(*compiler_state_out)->compiler_info
+        )
+    );
+    total_bytes += buffer_offset;
+    total_wire_used += wire_used;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_stack_info_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? aligned_buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            &(*compiler_state_out)->stack_info
+        )
+    );
+    total_bytes += buffer_offset;
+    total_wire_used += wire_used;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_extra_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? aligned_buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            &(*compiler_state_out)->extra
+        )
+    );
+    total_bytes += buffer_offset;
+    total_wire_used += wire_used;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_registers_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? aligned_buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            &(*compiler_state_out)->registers,
+            &(*compiler_state_out)->num_registers
+        )
+    );
+    total_bytes += buffer_offset;
+    total_wire_used += wire_used;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_requests_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? aligned_buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            &(*compiler_state_out)->request_stubs,
+            &(*compiler_state_out)->request_stub_sizes,
+            &(*compiler_state_out)->num_request_stubs
+        )
+    );
+    total_bytes += buffer_offset;
+    total_wire_used += wire_used;
+    
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    if (total_wire_used != *wire_used_out) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INTERNAL );
+    }
+
+    if (total_bytes != *buffer_bytes_written_out - _STACK_PTX_INJECT_SERIALIZE_ALIGNMENT) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INTERNAL );
+    }
+
+    *wire_used_out = total_wire_used;
+    *buffer_bytes_written_out = total_bytes;
+
+    return STACK_PTX_INJECT_SERIALIZE_SUCCESS;
+}
+
+STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
+bool
+stack_ptx_inject_compiler_state_equal(
+    const StackPtxInjectCompilerStateSerialize* compiler_state_x,
+    StackPtxInjectCompilerStateDeserialize* compiler_state_y
+) {
+    if (
+        !ptx_inject_data_type_infos_equal(
+            compiler_state_x->data_type_infos,
+            compiler_state_x->num_data_type_infos,
+            compiler_state_y->data_type_infos,
+            compiler_state_y->num_data_type_infos
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        !ptx_inject_ptx_equal(
+            compiler_state_x->annotated_ptx,
+            compiler_state_y->annotated_ptx
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        !stack_ptx_compiler_info_equal(
+            compiler_state_x->compiler_info,
+            compiler_state_y->compiler_info
+        )
+    ) {
+        return false;
+    }
+
+    if ( 
+        !stack_ptx_stack_info_equal(
+            compiler_state_x->stack_info,
+            compiler_state_y->stack_info
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        !stack_ptx_extra_equal(
+            compiler_state_x->extra,
+            compiler_state_y->extra
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        !stack_ptx_registers_equal(
+            compiler_state_x->registers,
+            compiler_state_x->num_registers,
+            compiler_state_y->registers,
+            compiler_state_y->num_registers
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        !stack_ptx_requests_equal(
+            compiler_state_x->request_stubs,
+            compiler_state_x->request_stub_sizes,
+            compiler_state_x->num_request_stubs,
+            (const size_t* const*)compiler_state_y->request_stubs,
+            compiler_state_y->request_stub_sizes,
+            compiler_state_y->num_request_stubs
+        )
+    ) {
+        return false;
+    }
+
     return true;
 }
 

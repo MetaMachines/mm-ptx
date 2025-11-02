@@ -506,7 +506,7 @@ main() {
     char* deserialized_ptx = NULL;
 
     stackPtxInjectSerializeCheck(
-        stack_ptx_ptx_serialize(
+        ptx_inject_ptx_serialize(
             ptx,
             serialized_ptx_buffer,
             serialized_ptx_buffer_size,
@@ -517,7 +517,7 @@ main() {
     serialized_ptx_buffer = malloc(serialized_ptx_buffer_size);
 
     stackPtxInjectSerializeCheck(
-        stack_ptx_ptx_serialize(
+        ptx_inject_ptx_serialize(
             ptx,
             serialized_ptx_buffer,
             serialized_ptx_buffer_size,
@@ -526,7 +526,7 @@ main() {
     );
 
     stackPtxInjectSerializeCheck(
-        stack_ptx_ptx_deserialize(
+        ptx_inject_ptx_deserialize(
             serialized_ptx_buffer,
             serialized_ptx_buffer_size,
             &serialized_ptx_buffer_used,
@@ -540,7 +540,7 @@ main() {
     deserialized_ptx_buffer = (uint8_t*)malloc(deserialized_ptx_buffer_size);
 
     stackPtxInjectSerializeCheck(
-        stack_ptx_ptx_deserialize(
+        ptx_inject_ptx_deserialize(
             serialized_ptx_buffer,
             serialized_ptx_buffer_size,
             &serialized_ptx_buffer_used,
@@ -552,20 +552,20 @@ main() {
     );
 
     ASSERT(
-        stack_ptx_ptx_equal(
+        ptx_inject_ptx_equal(
             ptx,
             deserialized_ptx
         )
     );
 
-    StackPtxExtra extra = { .device_capability_major = 8, .device_capability_minor = 9, .execution_limit = 100 };
+    StackPtxExtraInfo extra = { .device_capability_major = 8, .device_capability_minor = 9, .execution_limit = 100 };
     uint8_t* serialized_extra_buffer = NULL;
     size_t serialized_extra_buffer_size = 0;
     size_t serialized_extra_buffer_used = 0;
     uint8_t* deserialized_extra_buffer = NULL;
     size_t deserialized_extra_buffer_size = 0;
 
-    StackPtxExtra* deserialized_extra = NULL;
+    StackPtxExtraInfo* deserialized_extra = NULL;
 
     stackPtxInjectSerializeCheck(
         stack_ptx_extra_serialize(

@@ -414,24 +414,26 @@ main() {
         .execution_limit = 100
     };
 
+    StackPtxInjectCompilerStateSerialize compiler_state_serialize = {
+        .data_type_infos = ptx_inject_data_type_infos,
+        .num_data_type_infos = num_ptx_inject_data_type_infos,
+        .annotated_ptx = g_annotated_ptx_data,
+        .compiler_info = &stack_ptx_compiler_info,
+        .stack_info = &stack_ptx_stack_info,
+        .extra = &extra,
+        .registers = registers,
+        .num_registers = num_registers,
+        .request_stubs = request_stubs,
+        .request_stub_sizes = request_stub_sizes,
+        .num_request_stubs = num_request_stubs
+    };
+
     uint8_t* serialized_buffer = NULL;
     size_t serialized_buffer_size = 0;
 
     stackPtxInjectSerializeCheck(
-        compiler_serialize(
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
-            &stack_ptx_compiler_info,
-            &stack_ptx_stack_info,
-            g_annotated_ptx_data,
-            registers,
-            num_registers,
-            request_stubs,
-            request_stub_sizes,
-            num_request_stubs,
-            instruction_stubs,
-            num_instruction_stubs,
-            extra,
+        stack_ptx_inject_compiler_state_serialize(
+            &compiler_state_serialize,
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_size
@@ -441,157 +443,50 @@ main() {
     serialized_buffer = malloc(serialized_buffer_size);
 
     stackPtxInjectSerializeCheck(
-        compiler_serialize(
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
-            &stack_ptx_compiler_info,
-            &stack_ptx_stack_info,
-            g_annotated_ptx_data,
-            registers,
-            num_registers,
-            request_stubs,
-            request_stub_sizes,
-            num_request_stubs,
-            instruction_stubs,
-            num_instruction_stubs,
-            extra,
+        stack_ptx_inject_compiler_state_serialize(
+            &compiler_state_serialize,
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_size
         )
     );
 
-    PtxInjectDataTypeInfo* deserialized_data_type_infos = NULL;
-    size_t deserialized_num_data_type_infos = 0;
-    StackPtxCompilerInfo* deserialized_compiler_info = NULL;
-    StackPtxStackInfo* deserialized_stack_info = NULL;
-    char* deserialized_annotated_ptx = NULL;
-    StackPtxRegister* deserialized_registers = NULL;
-    size_t deserialized_num_registers = 0;
-    size_t** deserialized_request_stubs = NULL;
-    size_t* deserialized_request_stub_sizes = NULL;
-    size_t deserialized_num_request_stubs = 0;
-    StackPtxInstruction** deserialized_instruction_stubs = NULL;
-    size_t deserialized_num_instruction_stubs = 0;
-    StackPtxExtraInfo* deserialized_extra = NULL;
+    StackPtxInjectCompilerStateDeserialize* compiler_state_deserialize;
 
     size_t serialized_buffer_used;
     void* deserialized_buffer = NULL;
     size_t deserialized_buffer_size = 0;
 
     stackPtxInjectSerializeCheck(
-        compiler_deserialize(
+        stack_ptx_inject_compiler_state_deserialize(
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_used,
             deserialized_buffer,
             deserialized_buffer_size,
             &deserialized_buffer_size,
-            &deserialized_data_type_infos,
-            &deserialized_num_data_type_infos,
-            &deserialized_compiler_info,
-            &deserialized_stack_info,
-            &deserialized_annotated_ptx,
-            &deserialized_registers,
-            &deserialized_num_registers,
-            &deserialized_request_stubs,
-            &deserialized_request_stub_sizes,
-            &deserialized_num_request_stubs,
-            &deserialized_instruction_stubs,
-            &deserialized_num_instruction_stubs,
-            &deserialized_extra
+            &compiler_state_deserialize
         )
     );
 
     deserialized_buffer = malloc(deserialized_buffer_size);
 
     stackPtxInjectSerializeCheck(
-        compiler_deserialize(
+        stack_ptx_inject_compiler_state_deserialize(
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_used,
             deserialized_buffer,
             deserialized_buffer_size,
             &deserialized_buffer_size,
-            &deserialized_data_type_infos,
-            &deserialized_num_data_type_infos,
-            &deserialized_compiler_info,
-            &deserialized_stack_info,
-            &deserialized_annotated_ptx,
-            &deserialized_registers,
-            &deserialized_num_registers,
-            &deserialized_request_stubs,
-            &deserialized_request_stub_sizes,
-            &deserialized_num_request_stubs,
-            &deserialized_instruction_stubs,
-            &deserialized_num_instruction_stubs,
-            &deserialized_extra
-        )
-    );
-
-    ASSERT( 
-        ptx_inject_data_type_infos_equal(
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
-            deserialized_data_type_infos,
-            deserialized_num_data_type_infos
-        )
-    );
-
-    ASSERT( 
-        stack_ptx_compiler_info_equal(
-            &stack_ptx_compiler_info,
-            deserialized_compiler_info
-        )
-    );
-
-    ASSERT( 
-        stack_ptx_stack_info_equal(
-            &stack_ptx_stack_info,
-            deserialized_stack_info
+            &compiler_state_deserialize
         )
     );
 
     ASSERT(
-        ptx_inject_ptx_equal(
-            g_annotated_ptx_data,
-            deserialized_annotated_ptx
-        )
-    );
-
-    ASSERT(
-        stack_ptx_registers_equal(
-            registers,
-            num_registers,
-            deserialized_registers,
-            deserialized_num_registers
-        )
-    );
-
-    ASSERT(
-        stack_ptx_requests_equal(
-            request_stubs,
-            request_stub_sizes,
-            num_request_stubs,
-            (const size_t* const*)deserialized_request_stubs,
-            deserialized_request_stub_sizes,
-            deserialized_num_request_stubs
-        )
-    );
-
-    ASSERT(
-        stack_ptx_instructions_equal(
-            instruction_stubs,
-            num_instruction_stubs,
-            (const StackPtxInstruction* const*)deserialized_instruction_stubs,
-            deserialized_num_instruction_stubs
-        )
-    );
-
-    ASSERT(
-        stack_ptx_extra_equal(
-            &extra,
-            deserialized_extra
+        stack_ptx_inject_compiler_state_equal(
+            &compiler_state_serialize,
+            compiler_state_deserialize
         )
     );
 
