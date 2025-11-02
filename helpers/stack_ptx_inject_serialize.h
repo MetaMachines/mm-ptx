@@ -22,11 +22,6 @@
  * SPDX-License-Identifier: MIT
  */
 
- /**
- * @file
- * @brief This file contains all headers and source for PTX Inject.
- */
-
 #ifndef STACK_PTX_INJECT_SERIALIZE_H_INCLUDE
 #define STACK_PTX_INJECT_SERIALIZE_H_INCLUDE
 
