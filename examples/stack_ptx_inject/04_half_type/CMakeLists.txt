@@ -6,7 +6,7 @@ make_directory(${CMAKE_CURRENT_BINARY_DIR}/annotated_ptx)
 
 add_custom_command(OUTPUT ${PROCESSED_CUDA}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu ptxinject
-    COMMAND ${CMAKE_BINARY_DIR}/tools/ptxinject/ptxinject ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu -o ${CMAKE_CURRENT_BINARY_DIR}/processed_cuda -f
+    COMMAND $<TARGET_FILE:ptxinject> ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu -o ${CMAKE_CURRENT_BINARY_DIR}/processed_cuda -f
 )
 
 add_custom_command(OUTPUT ${ANNOTATED_PTX}

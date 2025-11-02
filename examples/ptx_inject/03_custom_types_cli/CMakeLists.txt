@@ -27,7 +27,7 @@ set_source_files_properties(${GENERATED_HDR}
 add_custom_target(ptx_types_headers DEPENDS ${GENERATED_HDR})
 
 include_directories(.)
-include_directories(${CMAKE_SOURCE_DIR}/tools/ptxinject)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/ptxinject)
 include_directories("${GENERATED_INC_DIR}")
 
 # Compile plugin using the registry.
@@ -50,7 +50,7 @@ make_directory(${CMAKE_CURRENT_BINARY_DIR}/annotated_ptx)
 add_custom_command(OUTPUT ${PROCESSED_CUDA}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu ptxinject
     COMMAND 
-        ${CMAKE_BINARY_DIR}/tools/ptxinject/ptxinject 
+        $<TARGET_FILE:ptxinject> 
         ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu 
         -o ${CMAKE_CURRENT_BINARY_DIR}/processed_cuda
         -t $<TARGET_FILE:custom_types>

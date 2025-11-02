@@ -8,12 +8,12 @@ find_package(OpenMP REQUIRED)
 
 add_custom_command(OUTPUT ${PROCESSED_CUDA}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu ptxinject
-    COMMAND ${CMAKE_BINARY_DIR}/tools/ptxinject/ptxinject ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu -o ${CMAKE_CURRENT_BINARY_DIR}/processed_cuda -f
+    COMMAND $<TARGET_FILE:ptxinject> ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu -o ${CMAKE_CURRENT_BINARY_DIR}/processed_cuda -f
 )
 
 add_custom_command(OUTPUT ${ANNOTATED_PTX}
     DEPENDS ${PROCESSED_CUDA}
-    COMMAND nvcc -O3 -prec-sqrt=false -arch=native -ptx ${PROCESSED_CUDA} -o ${ANNOTATED_PTX} -I ${CMAKE_SOURCE_DIR}/thirdparty/cutlass/include
+    COMMAND nvcc -O3 -prec-sqrt=false -arch=native -ptx ${PROCESSED_CUDA} -o ${ANNOTATED_PTX} -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../thirdparty/cutlass/include
 )
 
 add_executable(${PROJECT_NAME} main.c)
