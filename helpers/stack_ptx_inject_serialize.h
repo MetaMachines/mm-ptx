@@ -205,7 +205,7 @@ stack_ptx_registers_equal(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_requests_serialize(
-    const size_t** request_stubs,
+    const size_t* const* request_stubs,
     const size_t* request_stubs_sizes,
     size_t num_request_stubs,
     uint8_t* buffer,
@@ -230,10 +230,10 @@ stack_ptx_requests_deserialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 bool
 stack_ptx_requests_equal(
-    const size_t** requests_stubs_x,
+    const size_t* const* requests_stubs_x,
     const size_t* request_stubs_sizes_x,
     size_t num_request_stubs_x,
-    const size_t** requests_stubs_y,
+    const size_t* const* requests_stubs_y,
     const size_t* request_stubs_sizes_y,
     size_t num_request_stubs_y
 );
@@ -241,7 +241,7 @@ stack_ptx_requests_equal(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_instructions_serialize(
-    const StackPtxInstruction** instruction_stubs,
+    const StackPtxInstruction* const* instruction_stubs,
     size_t num_instruction_stubs,
     uint8_t* buffer,
     size_t buffer_size,
@@ -264,9 +264,9 @@ stack_ptx_instructions_deserialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 bool
 stack_ptx_instructions_equal(
-    const StackPtxInstruction** instruction_stubs_x,
+    const StackPtxInstruction* const* instruction_stubs_x,
     size_t num_instruction_stubs_x,
-    const StackPtxInstruction** instruction_stubs_y,
+    const StackPtxInstruction* const* instruction_stubs_y,
     size_t num_instruction_stubs_y
 );
 
@@ -1453,7 +1453,7 @@ static
 inline
 StackPtxInjectSerializeResult
 _stack_ptx_requests_serialize_size(
-    const size_t** request_stubs,
+    const size_t* const* request_stubs,
     const size_t* request_stubs_sizes,
     size_t num_request_stubs,
     size_t* buffer_bytes_written_out
@@ -1474,7 +1474,7 @@ _stack_ptx_requests_serialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_requests_serialize(
-    const size_t** request_stubs,
+    const size_t* const* request_stubs,
     const size_t* request_stubs_sizes,
     size_t num_request_stubs,
     uint8_t* buffer,
@@ -1650,10 +1650,10 @@ stack_ptx_requests_deserialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 bool
 stack_ptx_requests_equal(
-    const size_t** requests_stubs_x,
+    const size_t* const* requests_stubs_x,
     const size_t* request_stubs_sizes_x,
     size_t num_request_stubs_x,
-    const size_t** requests_stubs_y,
+    const size_t* const* requests_stubs_y,
     const size_t* request_stubs_sizes_y,
     size_t num_request_stubs_y
 ) {
@@ -1685,7 +1685,7 @@ static
 inline
 StackPtxInjectSerializeResult
 _stack_ptx_instructions_serialize_size(
-    const StackPtxInstruction** instruction_stubs,
+    const StackPtxInstruction* const* instruction_stubs,
     size_t num_instruction_stubs,
     size_t* buffer_bytes_written_out
 ) {
@@ -1713,7 +1713,7 @@ _stack_ptx_instructions_serialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_instructions_serialize(
-    const StackPtxInstruction** instruction_stubs,
+    const StackPtxInstruction* const* instruction_stubs,
     size_t num_instruction_stubs,
     uint8_t* buffer,
     size_t buffer_size,
@@ -1882,9 +1882,9 @@ stack_ptx_instructions_deserialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 bool
 stack_ptx_instructions_equal(
-    const StackPtxInstruction** instruction_stubs_x,
+    const StackPtxInstruction* const* instruction_stubs_x,
     size_t num_instruction_stubs_x,
-    const StackPtxInstruction** instruction_stubs_y,
+    const StackPtxInstruction* const* instruction_stubs_y,
     size_t num_instruction_stubs_y
 ) {
     if (num_instruction_stubs_x != num_instruction_stubs_y) {

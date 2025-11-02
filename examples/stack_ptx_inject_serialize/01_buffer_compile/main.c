@@ -1,4 +1,8 @@
+
+#define STACK_PTX_IMPLEMENTATION
 #include <stack_ptx.h>
+
+#define PTX_INJECT_IMPLEMENTATION
 #include <ptx_inject.h>
 
 #define STACK_PTX_INJECT_SERIALIZE_DEBUG
@@ -14,6 +18,8 @@
 #include <assert.h>
 
 #include <check_result_helper.h>
+#include <cuda.h>
+#include <helpers.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
@@ -40,6 +46,14 @@ compiler_serialize(
     const StackPtxCompilerInfo* compiler_info,
     const StackPtxStackInfo* stack_info,
     const char* annotated_ptx,
+    const StackPtxRegister* registers,
+    size_t num_registers,
+    const size_t* const* request_stubs,
+    const size_t* request_stub_sizes,
+    size_t num_request_stubs,
+    const StackPtxInstruction* const* instruction_stubs,
+    size_t num_instruction_stubs,
+    StackPtxExtra extra,
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out
@@ -81,11 +95,59 @@ compiler_serialize(
     );
     total_bytes += buffer_offset;
 
-    size_t annotated_ptx_size = strlen(annotated_ptx) + 1;
-    if (buffer) {
-        memcpy(buffer + total_bytes, annotated_ptx, annotated_ptx_size);
-    }
-    total_bytes += annotated_ptx_size;
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_ptx_serialize(
+            annotated_ptx,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_registers_serialize(
+            registers,
+            num_registers,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_requests_serialize(
+            request_stubs,
+            request_stub_sizes,
+            num_request_stubs,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+    
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_instructions_serialize(
+            instruction_stubs,
+            num_instruction_stubs,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_extra_serialize(
+            &extra,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset
+        )
+    );
+    total_bytes += buffer_offset;
 
     *buffer_bytes_written_out = total_bytes;
 
@@ -104,7 +166,15 @@ compiler_deserialize(
     size_t* num_data_type_infos_out,
     StackPtxCompilerInfo** compiler_info_out,
     StackPtxStackInfo** stack_info_out,
-    const char** annotated_ptx
+    char** annotated_ptx,
+    StackPtxRegister** registers_out,
+    size_t* num_registers_out,
+    size_t*** requests_stubs_out,
+    size_t** request_stubs_sizes_out,
+    size_t* num_requests_stubs_out,
+    StackPtxInstruction*** instruction_stubs_out,
+    size_t* num_instruction_stubs_out,
+    StackPtxExtra** extra_out
 ) {
     if (!wire || !wire_used_out || !buffer_bytes_written_out) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INVALID_INPUT );
@@ -174,17 +244,96 @@ compiler_deserialize(
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
     }
 
-    size_t annotated_ptx_size = strlen(wire + total_wire_used) + 1;
-    if (buffer) {
-        if (annotated_ptx_size > buffer_size - total_bytes) {
-            _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
-        }
-        *annotated_ptx = buffer + total_bytes;
-        memcpy(buffer + total_bytes, wire + total_wire_used, annotated_ptx_size);
-    }
-    total_wire_used += annotated_ptx_size;
-    total_bytes += annotated_ptx_size;
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_ptx_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            annotated_ptx
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
 
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_registers_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            registers_out,
+            num_registers_out
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_requests_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            requests_stubs_out,
+            request_stubs_sizes_out,
+            num_requests_stubs_out
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_instructions_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            instruction_stubs_out,
+            num_instruction_stubs_out
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+
+    if (buffer && buffer_size < total_bytes) {
+        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
+    }
+
+    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
+        stack_ptx_extra_deserialize(
+            wire + total_wire_used,
+            wire_size - total_wire_used,
+            &wire_used,
+            buffer ? buffer + total_bytes : NULL,
+            buffer ? buffer_size - total_bytes : 0,
+            &buffer_offset,
+            extra_out
+        )
+    );
+    total_wire_used += wire_used;
+    total_bytes += buffer_offset;
+    
     if (buffer && buffer_size < total_bytes) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
     }
@@ -197,6 +346,74 @@ compiler_deserialize(
 
 int
 main() {
+
+    PtxInjectHandle ptx_inject;
+    ptxInjectCheck(
+        ptx_inject_create(
+            &ptx_inject, 
+            ptx_inject_data_type_infos,
+            num_ptx_inject_data_type_infos,
+            g_annotated_ptx_data
+        )
+    );
+
+    enum Register {
+        REGISTER_X,
+        REGISTER_Y,
+        REGISTER_Z,
+        REGISTER_NUM_ENUMS
+    };
+
+    StackPtxRegister registers[] = {
+        [REGISTER_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
+        [REGISTER_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
+        [REGISTER_Z] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
+    };
+    static const size_t num_registers = REGISTER_NUM_ENUMS;
+
+    size_t inject_func_idx;
+    ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "func", &inject_func_idx, NULL, NULL) );
+
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "x", NULL, NULL, NULL, &registers[REGISTER_X].name) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "y", NULL, NULL, NULL, &registers[REGISTER_Y].name) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "z", NULL, NULL, NULL, &registers[REGISTER_Z].name) );
+
+    static const size_t requests[] = {
+        REGISTER_Z
+    };
+
+    static const size_t* request_stubs[]      = { requests };
+    static const size_t  request_stub_sizes[] = { STACK_PTX_ARRAY_NUM_ELEMS(requests) };
+    static const size_t  num_request_stubs    = { STACK_PTX_ARRAY_NUM_ELEMS(request_stubs) };
+
+    static const StackPtxInstruction add_inputs[] = {
+        stack_ptx_encode_input(REGISTER_X),
+        stack_ptx_encode_input(REGISTER_Y),
+        stack_ptx_encode_ptx_instruction_add_ftz_f32,
+        stack_ptx_encode_return
+    };
+
+    static const StackPtxInstruction* instruction_stubs[] = { add_inputs };
+    static const size_t num_instruction_stubs = { STACK_PTX_ARRAY_NUM_ELEMS(instruction_stubs) };
+
+    cuCheck( cuInit(0) );
+    CUdevice cu_device;
+    
+    cuCheck( cuDeviceGet(&cu_device, 0) );
+    
+    int device_compute_capability_major;
+    int device_compute_capability_minor;
+
+    get_device_capability(cu_device, &device_compute_capability_major, &device_compute_capability_minor);
+
+    printf("Device(0) has compute capability: sm_%d%d\n\n", device_compute_capability_major, device_compute_capability_minor);
+
+    StackPtxExtra extra = {
+        .device_capability_major = device_compute_capability_major,
+        .device_capability_minor = device_compute_capability_minor,
+        .execution_limit = 100
+    };
+
     uint8_t* serialized_buffer = NULL;
     size_t serialized_buffer_size = 0;
 
@@ -207,6 +424,14 @@ main() {
             &stack_ptx_compiler_info,
             &stack_ptx_stack_info,
             g_annotated_ptx_data,
+            registers,
+            num_registers,
+            request_stubs,
+            request_stub_sizes,
+            num_request_stubs,
+            instruction_stubs,
+            num_instruction_stubs,
+            extra,
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_size
@@ -222,6 +447,14 @@ main() {
             &stack_ptx_compiler_info,
             &stack_ptx_stack_info,
             g_annotated_ptx_data,
+            registers,
+            num_registers,
+            request_stubs,
+            request_stub_sizes,
+            num_request_stubs,
+            instruction_stubs,
+            num_instruction_stubs,
+            extra,
             serialized_buffer,
             serialized_buffer_size,
             &serialized_buffer_size
@@ -229,14 +462,22 @@ main() {
     );
 
     PtxInjectDataTypeInfo* deserialized_data_type_infos = NULL;
-    size_t deserialized_num_data_type_infos;
+    size_t deserialized_num_data_type_infos = 0;
     StackPtxCompilerInfo* deserialized_compiler_info = NULL;
     StackPtxStackInfo* deserialized_stack_info = NULL;
-    
+    char* deserialized_annotated_ptx = NULL;
+    StackPtxRegister* deserialized_registers = NULL;
+    size_t deserialized_num_registers = 0;
+    size_t** deserialized_request_stubs = NULL;
+    size_t* deserialized_request_stub_sizes = NULL;
+    size_t deserialized_num_request_stubs = 0;
+    StackPtxInstruction** deserialized_instruction_stubs = NULL;
+    size_t deserialized_num_instruction_stubs = 0;
+    StackPtxExtra* deserialized_extra = NULL;
+
     size_t serialized_buffer_used;
     void* deserialized_buffer = NULL;
     size_t deserialized_buffer_size = 0;
-    const char* deserialized_annotated_ptx = NULL;
 
     stackPtxInjectSerializeCheck(
         compiler_deserialize(
@@ -250,7 +491,15 @@ main() {
             &deserialized_num_data_type_infos,
             &deserialized_compiler_info,
             &deserialized_stack_info,
-            &deserialized_annotated_ptx
+            &deserialized_annotated_ptx,
+            &deserialized_registers,
+            &deserialized_num_registers,
+            &deserialized_request_stubs,
+            &deserialized_request_stub_sizes,
+            &deserialized_num_request_stubs,
+            &deserialized_instruction_stubs,
+            &deserialized_num_instruction_stubs,
+            &deserialized_extra
         )
     );
 
@@ -268,7 +517,15 @@ main() {
             &deserialized_num_data_type_infos,
             &deserialized_compiler_info,
             &deserialized_stack_info,
-            &deserialized_annotated_ptx
+            &deserialized_annotated_ptx,
+            &deserialized_registers,
+            &deserialized_num_registers,
+            &deserialized_request_stubs,
+            &deserialized_request_stub_sizes,
+            &deserialized_num_request_stubs,
+            &deserialized_instruction_stubs,
+            &deserialized_num_instruction_stubs,
+            &deserialized_extra
         )
     );
 
@@ -295,7 +552,48 @@ main() {
         )
     );
 
-    printf("%s\n", deserialized_annotated_ptx);
+    ASSERT(
+        stack_ptx_ptx_equal(
+            g_annotated_ptx_data,
+            deserialized_annotated_ptx
+        )
+    );
+
+    ASSERT(
+        stack_ptx_registers_equal(
+            registers,
+            num_registers,
+            deserialized_registers,
+            deserialized_num_registers
+        )
+    );
+
+    ASSERT(
+        stack_ptx_requests_equal(
+            request_stubs,
+            request_stub_sizes,
+            num_request_stubs,
+            (const size_t* const*)deserialized_request_stubs,
+            deserialized_request_stub_sizes,
+            deserialized_num_request_stubs
+        )
+    );
+
+    ASSERT(
+        stack_ptx_instructions_equal(
+            instruction_stubs,
+            num_instruction_stubs,
+            (const StackPtxInstruction* const*)deserialized_instruction_stubs,
+            deserialized_num_instruction_stubs
+        )
+    );
+
+    ASSERT(
+        stack_ptx_extra_equal(
+            &extra,
+            deserialized_extra
+        )
+    );
 
     free(serialized_buffer);
     free(deserialized_buffer);
