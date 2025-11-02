@@ -401,4 +401,99 @@ main() {
         )
     );
 
+    const StackPtxInstruction instruction_stub_0[] = {
+        stack_ptx_encode_constant_u32(1.0),
+        stack_ptx_encode_constant_u32(2.0),
+        stack_ptx_encode_ptx_instruction_add_u32,
+        stack_ptx_encode_return
+    };
+
+    const StackPtxInstruction instruction_stub_1[] = {
+        stack_ptx_encode_constant_f32(1.0),
+        stack_ptx_encode_constant_f32(2.0),
+        stack_ptx_encode_ptx_instruction_add_ftz_f32,
+        stack_ptx_encode_return
+    };
+
+    const StackPtxInstruction instruction_stub_2[] = {
+        stack_ptx_encode_constant_f32(10.0f),
+        stack_ptx_encode_return
+    };
+
+    const StackPtxInstruction* instruction_stubs[] = {
+        instruction_stub_0,
+        instruction_stub_1,
+        instruction_stub_2
+    };
+
+    size_t num_instruction_stubs = STACK_PTX_ARRAY_NUM_ELEMS(instruction_stubs);
+
+    uint8_t* serialized_instructions_buffer = NULL;
+    size_t serialized_instructions_buffer_size = 0;
+    size_t serialized_instructions_buffer_used = 0;
+    uint8_t* deserialized_instructions_buffer = NULL;
+    size_t deserialized_instructions_buffer_size = 0;
+
+    StackPtxInstruction** deserialized_instruction_stubs = NULL;
+    size_t deserialized_num_instruction_stubs;
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_instructions_serialize(
+            instruction_stubs,
+            num_instruction_stubs,
+            serialized_instructions_buffer,
+            serialized_instructions_buffer_size,
+            &serialized_instructions_buffer_size
+        )
+    );
+
+    serialized_instructions_buffer = malloc(serialized_instructions_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_instructions_serialize(
+            instruction_stubs,
+            num_instruction_stubs,
+            serialized_instructions_buffer,
+            serialized_instructions_buffer_size,
+            &serialized_instructions_buffer_size
+        )
+    );
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_instructions_deserialize(
+            serialized_instructions_buffer,
+            serialized_instructions_buffer_size,
+            &serialized_instructions_buffer_used,
+            deserialized_instructions_buffer,
+            deserialized_instructions_buffer_size,
+            &deserialized_instructions_buffer_size,
+            &deserialized_instruction_stubs,
+            &deserialized_num_instruction_stubs
+        )
+    );
+
+    deserialized_instructions_buffer = (uint8_t*)malloc(deserialized_instructions_buffer_size);
+
+    stackPtxInjectSerializeCheck(
+        stack_ptx_instructions_deserialize(
+            serialized_instructions_buffer,
+            serialized_instructions_buffer_size,
+            &serialized_instructions_buffer_used,
+            deserialized_instructions_buffer,
+            deserialized_instructions_buffer_size,
+            &deserialized_instructions_buffer_size,
+            &deserialized_instruction_stubs,
+            &deserialized_num_instruction_stubs
+        )
+    );
+
+    ASSERT(
+        stack_ptx_instructions_equal(
+            instruction_stubs,
+            num_instruction_stubs,
+            (const StackPtxInstruction**)deserialized_instruction_stubs,
+            deserialized_num_instruction_stubs
+        )
+    );
+
 }
