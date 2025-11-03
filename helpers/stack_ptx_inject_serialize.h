@@ -117,7 +117,7 @@ ptx_inject_data_type_infos_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 ptx_inject_data_type_infos_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -155,7 +155,7 @@ stack_ptx_compiler_info_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_compiler_info_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -189,7 +189,7 @@ stack_ptx_stack_info_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_stack_info_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -224,7 +224,7 @@ stack_ptx_registers_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_registers_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -257,7 +257,7 @@ stack_ptx_requests_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_requests_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -292,7 +292,7 @@ stack_ptx_instructions_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_instructions_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -323,7 +323,7 @@ ptx_inject_ptx_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 ptx_inject_ptx_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -351,7 +351,7 @@ stack_ptx_extra_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_extra_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -379,7 +379,7 @@ stack_ptx_inject_compiler_state_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEC
 StackPtxInjectSerializeResult
 stack_ptx_inject_compiler_state_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -615,7 +615,7 @@ _ptx_inject_serialize_data_type_infos_deserialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 ptx_inject_data_type_infos_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -781,7 +781,7 @@ stack_ptx_compiler_info_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_compiler_info_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -1013,7 +1013,7 @@ static
 inline
 StackPtxInjectSerializeResult
 _stack_ptx_stack_info_deserialize_size(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     size_t* buffer_bytes_written_out
@@ -1073,7 +1073,7 @@ _stack_ptx_stack_info_deserialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_stack_info_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -1374,7 +1374,7 @@ static
 inline
 StackPtxInjectSerializeResult
 _stack_ptx_registers_deserialize_size(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     size_t* buffer_bytes_written_out
@@ -1408,7 +1408,7 @@ _stack_ptx_registers_deserialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_registers_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -1604,7 +1604,7 @@ static
 inline
 StackPtxInjectSerializeResult
 _stack_ptx_requests_deserialize_size(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     size_t* buffer_bytes_written_out
@@ -1640,7 +1640,7 @@ _stack_ptx_requests_deserialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_requests_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -1838,7 +1838,7 @@ static
 inline
 StackPtxInjectSerializeResult
 _stack_ptx_instructions_deserialize_size(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     size_t* buffer_bytes_written_out
@@ -1874,7 +1874,7 @@ _stack_ptx_instructions_deserialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_instructions_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -2029,7 +2029,7 @@ ptx_inject_ptx_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 ptx_inject_ptx_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -2129,7 +2129,7 @@ stack_ptx_extra_serialize(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_extra_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
@@ -2272,7 +2272,7 @@ static
 inline
 StackPtxInjectSerializeResult
 _stack_ptx_inject_compiler_state_deserialize_size(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     size_t* buffer_bytes_written_out
@@ -2398,7 +2398,7 @@ _stack_ptx_inject_compiler_state_deserialize_size(
 STACK_PTX_INJECT_SERIALIZE_PUBLIC_DEF
 StackPtxInjectSerializeResult
 stack_ptx_inject_compiler_state_deserialize(
-    uint8_t* wire,
+    const uint8_t* wire,
     size_t wire_size,
     size_t* wire_used_out,
     uint8_t* buffer,
