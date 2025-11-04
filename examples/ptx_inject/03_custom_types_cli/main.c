@@ -108,7 +108,7 @@ main() {
     printf("Device(0) has compute capability: sm_%d%d\n\n", device_compute_capability_major, device_compute_capability_minor);
 
     // We can now compile this ptx to sass
-    void* sass = nvptx_compile(device_compute_capability_major, device_compute_capability_minor, rendered_ptx, num_bytes_written, false);
+    void* sass = nvptx_compile(device_compute_capability_major, device_compute_capability_minor, rendered_ptx, num_bytes_written, NULL, false);
 
     // Free rendered_ptx buffer
     free(rendered_ptx);

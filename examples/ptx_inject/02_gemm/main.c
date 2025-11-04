@@ -52,7 +52,8 @@ run_custom_mma(
             device_compute_capability_major, 
             device_compute_capability_minor, 
             rendered_ptx, 
-            rendered_ptx_num_bytes, 
+            rendered_ptx_num_bytes,
+            NULL,
             false
         );
     double time_end = clock();

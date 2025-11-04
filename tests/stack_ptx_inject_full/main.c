@@ -281,7 +281,8 @@ main() {
         nvptx_compile(
             device_compute_capability_major, device_compute_capability_minor, 
             buffers.rendered_ptx, 
-            rendered_ptx_bytes_written, 
+            rendered_ptx_bytes_written,
+            NULL,
             false
         );
 

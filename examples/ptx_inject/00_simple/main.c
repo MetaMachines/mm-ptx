@@ -189,7 +189,14 @@ main() {
     ptxInjectCheck( ptx_inject_destroy(ptx_inject) );
 
     // We can now compile this ptx to sass
-    void* sass = nvptx_compile(device_compute_capability_major, device_compute_capability_minor, rendered_ptx, num_bytes, false);
+    void* sass = 
+        nvptx_compile(
+            device_compute_capability_major, 
+            device_compute_capability_minor, 
+            rendered_ptx, num_bytes, 
+            NULL,
+            false
+        );
 
     // Free rendered_ptx buffer
     free(rendered_ptx);

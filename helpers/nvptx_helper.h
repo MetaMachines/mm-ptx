@@ -54,6 +54,7 @@ nvptx_compile(
     int compute_capability_minor,
     const char *ptx_code,
     size_t ptx_code_size,
+    size_t* sass_image_size_out,
     bool verbose
 ) {
     char compile_line_buffer[32];
@@ -105,6 +106,10 @@ nvptx_compile(
     nvptxCheck(
         nvPTXCompilerDestroy(&nvptx_compiler)
     );
+
+    if (sass_image_size_out) {
+        *sass_image_size_out = binary_image_size;
+    }
 
     return binary_image;
 }
