@@ -10,9 +10,13 @@
 #include <ptx_inject_default_generated_types.h>
 
 #include <cuda.h>
-#include <helpers.h>
 #include <math.h>
 #include <time.h>
+
+#include <nvptx_helper.h>
+#include <ptx_inject_helper.h>
+#include <cuda_helper.h>
+#include <mma_helper.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE

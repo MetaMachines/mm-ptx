@@ -12,13 +12,15 @@ set(CUDA_REPLICATOR_SCRIPT  ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/cuda_kern
 
 find_package(OpenMP REQUIRED)
 
+set(NUM_KERNEL_REPLICATIONS 64)
+
 add_custom_command(OUTPUT ${REPLICATED_CUDA}
     DEPENDS ${CUDA_KERNEL} ${CUDA_REPLICATOR_SCRIPT}
     COMMAND ${Python3_EXECUTABLE} ${CUDA_REPLICATOR_SCRIPT}
-        -n 128
+        -n ${NUM_KERNEL_REPLICATIONS}
         -t ${CUDA_KERNEL}
         -o ${REPLICATED_CUDA}
-    COMMENT "Replicating CUDA kernel 128 times"
+    COMMENT "Replicating CUDA kernel ${NUM_KERNEL_REPLICATIONS} times"
 )
 
 add_custom_command(OUTPUT ${REPLICATED_PROCESSED_CUDA}
@@ -34,12 +36,13 @@ add_custom_command(OUTPUT ${ANNOTATED_PTX}
 add_executable(${PROJECT_NAME} main.c)
 set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/main.c OBJECT_DEPENDS ${ANNOTATED_PTX})
 target_compile_definitions(${PROJECT_NAME} PRIVATE "PTX_KERNEL=${ANNOTATED_PTX}")
+target_compile_definitions(${PROJECT_NAME} PRIVATE "NUM_KERNEL_REPLICATIONS=${NUM_KERNEL_REPLICATIONS}")
 target_link_libraries(
     ${PROJECT_NAME} 
     CUDA::cuda_driver
-    CUDA::nvrtc
+    # CUDA::nvrtc
     CUDA::nvptxcompiler_static
-    CUDA::nvJitLink
+    # CUDA::nvJitLink
     OpenMP::OpenMP_C
     m
 )

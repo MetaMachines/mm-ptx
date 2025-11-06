@@ -19,7 +19,7 @@
 
 #include <check_result_helper.h>
 #include <cuda.h>
-#include <helpers.h>
+#include <cuda_helper.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE

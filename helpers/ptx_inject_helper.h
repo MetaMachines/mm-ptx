@@ -7,6 +7,7 @@
 #pragma once
 
 #include <ptx_inject.h>
+#include <check_result_helper.h>
 
 __attribute__((unused))
 static

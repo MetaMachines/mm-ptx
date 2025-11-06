@@ -16,14 +16,16 @@
 #include <stack_ptx_default_generated_types.h>
 
 #include <stack_ptx_default_info.h>
+#include <ptx_inject_helper.h>
+#include <cuda_helper.h>
+#include <nvrtc_helper.h>
+#include <nvptx_helper.h>
 
 #include <cuda.h>
 #include <time.h>
 
 #define MAX_NUM_TIMING_STAGES 10
 #define STUB_BUFFER_SIZE 1000000ull
-
-#include <helpers.h>
 
 static const char static_annotated_cuda[] = "   \n\
 extern \"C\"                                    \n\

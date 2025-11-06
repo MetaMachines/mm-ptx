@@ -16,7 +16,10 @@
 #include <stack_ptx_default_generated_types.h>
 #include <stack_ptx_default_info.h>
 
-#include <helpers.h>
+#include <check_result_helper.h>
+#include <cuda_helper.h>
+#include <nvptx_helper.h>
+
 #include <omp.h>
 #include <nvJitLink.h>
 #include <string.h>
@@ -27,6 +30,10 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <time.h>
+
+#include <cuda.h>
+
+#include <ptx_inject_helper.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
@@ -196,7 +203,8 @@ static const char* cuda_variable_names[] = {
 
 static const size_t num_registers = REGISTER_NUM_ENUMS;
 
-static const size_t num_kernels = 128;
+// This definition comes from CMake
+static const size_t num_kernels = NUM_KERNEL_REPLICATIONS;
 
 int
 main() {

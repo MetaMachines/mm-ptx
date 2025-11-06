@@ -16,10 +16,14 @@
 #include <stack_ptx_default_generated_types.h>
 #include <stack_ptx_default_info.h>
 
-#include <helpers.h>
+#include <ptx_inject_helper.h>
+#include <cuda_helper.h>
+#include <nvptx_helper.h>
+
 #include <omp.h>
 #include <nvJitLink.h>
 #include <string.h>
+#include <cuda.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE

@@ -15,7 +15,10 @@
 #include <stack_ptx_default_generated_types.h>
 #include <stack_ptx_default_info.h>
 
-#include <helpers.h>
+#include <cuda_helper.h>
+#include <nvptx_helper.h>
+#include <ptx_inject_helper.h>
+#include <mma_helper.h>
 #include <time.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
