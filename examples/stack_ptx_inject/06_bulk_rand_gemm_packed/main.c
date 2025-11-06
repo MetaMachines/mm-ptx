@@ -31,6 +31,8 @@
 #include <stdio.h>
 #include <time.h>
 
+#include <mma_helper.h>
+
 #include <cuda.h>
 
 #include <ptx_inject_helper.h>
@@ -44,6 +46,11 @@
 #define XSTRING(x) STRING(x)
 
 INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
+
+// Prints the InstructionLayout and the related matrix
+#define MATRIX_PRINT_RESULTS            1
+// Number of rows and columns to print of the matrix
+#define MATRIX_PRINT_LIMIT              5
 
 static
 inline
@@ -119,7 +126,7 @@ print_instruction_layout(
 
 static
 void
-populate_instruction_layotus(
+populate_instruction_layouts(
     InstructionLayout* instruction_layouts,
     size_t num_instruction_layouts
 ) {
@@ -209,7 +216,7 @@ static const size_t num_kernels = NUM_KERNEL_REPLICATIONS;
 int
 main() {
     InstructionLayout* instruction_layouts = (InstructionLayout*)malloc(num_kernels * sizeof(InstructionLayout)); 
-    populate_instruction_layotus(instruction_layouts, num_kernels);
+    populate_instruction_layouts(instruction_layouts, num_kernels);
 
     for (size_t i = 0; i < num_kernels; i++) {
         InstructionLayout instruction_layout = instruction_layouts[i];
@@ -296,7 +303,7 @@ main() {
     } FuncIndices;
 
     // We're going to store it [num_funcs][3]
-    size_t* reverse_indices = (size_t*)malloc(num_injects * sizeof(size_t*));
+    size_t* reverse_indices = (size_t*)malloc(num_injects * sizeof(size_t));
 
     typedef enum {
         IT_MULTIPLY,
@@ -564,234 +571,98 @@ main() {
         printf("name: %s\n", func_name);
     }
 
-#if 0
-    StackPtxRegister registers[REGISTER_NUM_ENUMS];
-    static const size_t num_registers = REGISTER_NUM_ENUMS;
+    static const int M = 128;
+    static const int N = 128;
+    static const int K = 8;
+    static const int lda = 128;
+    static const int ldb = 128;
+    static const int ldc = 128;
+    static const unsigned int block_dim = 256;
 
-    static const size_t requests[] = {
-        REGISTER_Z
-    };
-    static const size_t num_requests = STACK_PTX_ARRAY_NUM_ELEMS(requests);
+    float* h_a = (float*)malloc((size_t)M * (size_t)K * sizeof(float));
+    float* h_b = (float*)malloc((size_t)N * (size_t)K * sizeof(float));
+    float* h_c = (float*)malloc((size_t)M * (size_t)N * sizeof(float));
 
-    size_t first_inject_idx = 0;
-    for (size_t i = 0; i < num_registers; i++) {
-        StackPtxRegister* reg = &registers[i];
-        reg->stack_idx = STACK_PTX_STACK_TYPE_F32;
-        const char* cuda_variable_name = cuda_variable_names[i];
-        ptxInjectCheck( 
-            ptx_inject_variable_info_by_name(ptx_inject, first_inject_idx, cuda_variable_name, NULL, NULL, NULL, &reg->name) 
-        );
-    }
+    for (int j = 0; j < M*K; ++j) h_a[j] = 2*(rand() / (double)(RAND_MAX)) - 1;
+    for (int j = 0; j < N*K; ++j) h_b[j] = 2*(rand() / (double)(RAND_MAX)) - 1;
 
-    // Now register mappings are loaded.
+    CUdeviceptr d_a;
+    CUdeviceptr d_b;
+    CUdeviceptr d_cs;
 
-    const char** ptx_stubs = (const char**)malloc(num_injects * sizeof(const char*));
+    size_t d_c_matrix_size = (size_t)M * (size_t)N * sizeof(float);
 
-    size_t stack_ptx_workspace_size;
-    stackPtxCheck(
-        stack_ptx_compile_workspace_size(
-            &compiler_info,
-            &stack_ptx_stack_info,
-            &stack_ptx_workspace_size
-        )
-    );
+    cuCheck( cuMemAlloc(&d_a, (size_t)M * (size_t)K * sizeof(float)) );
+    cuCheck( cuMemAlloc(&d_b, (size_t)N * (size_t)K * sizeof(float)) );
+    // Allocate an output tensor for each kernel.
+    cuCheck( cuMemAlloc(&d_cs, d_c_matrix_size * num_kernels) );
 
-    void* stack_ptx_workspace = malloc(stack_ptx_workspace_size);
+    cuCheck( cuMemcpyHtoD(d_a, h_a, (size_t)M * (size_t)K * sizeof(float)) );
+    cuCheck( cuMemcpyHtoD(d_b, h_b, (size_t)N * (size_t)K * sizeof(float)) );
 
-    static const size_t execution_limit = 100;
-    size_t capacity = 1000000ull;
-    size_t required;
+    CUstream stream;
+    cuCheck( cuStreamCreate(&stream, 0) );
 
-    char* buffer = (char*)malloc(capacity);
-    char* buffer_ptr = buffer;
-    for (size_t i = 0; i < num_injects; i++) {
-        const StackPtxInstruction instructions[] = {
-            stack_ptx_encode_input(REGISTER_X),
-            stack_ptx_encode_input(REGISTER_Y),
-            stack_ptx_encode_constant_f32((float)i),
-            stack_ptx_encode_ptx_instruction_add_ftz_f32,
-            stack_ptx_encode_ptx_instruction_add_ftz_f32,
-            stack_ptx_encode_return
-        };
-
-        ptx_stubs[i] = buffer_ptr;
-        stackPtxCheck(
-            stack_ptx_compile(
-                &compiler_info,
-                &stack_ptx_stack_info,
-                instructions,
-                registers,
-                num_registers,
-                NULL, 0,
-                requests,
-                num_requests,
-                execution_limit,
-                stack_ptx_workspace,
-                stack_ptx_workspace_size,
-                buffer_ptr,
-                capacity,
-                &required
-            )
-        );
-        buffer_ptr += required;
-        capacity -= required;
-
-        // Adjust for NULL terminator
-        buffer_ptr++;
-        capacity--;
-
-    }
-
-    // for (size_t i = 0; i < num_injects; i++) {
-    //     printf("inject #%zu:\n%s\n", i, ptx_stubs[i]);
-    // }
-
-    char* rendered_ptx = buffer_ptr;
-    ptxInjectCheck(
-        ptx_inject_render_ptx(
-            ptx_inject,
-            ptx_stubs,
-            num_injects,
-            buffer_ptr,
-            capacity,
-            &required
-        )
-    );
-    buffer_ptr += required;
-    capacity -= required;
-
-    // Adjust for NULL terminator
-    buffer_ptr++;
-    capacity--;
-
-    // printf(
-    //     "---------------------\n"
-    //     "%s\n"
-    //     "---------------------\n", 
-    //     rendered_ptx
-    // );
-
-    cuCheck( cuInit(0) );
-    CUdevice cu_device;
+    double time_start, time_end;
     
-    cuCheck( cuDeviceGet(&cu_device, 0) );
-    
-    int device_compute_capability_major;
-    int device_compute_capability_minor;
-
-    get_device_capability(cu_device, &device_compute_capability_major, &device_compute_capability_minor);
-
-    // printf("Device(0, sm_%d%d)\n\n", device_compute_capability_major, device_compute_capability_minor);
-
-    // Put together the nvPTX compiler options with the proper architecture.
-    char nv_ptx_compile_line_buffer[32];
-    sprintf(nv_ptx_compile_line_buffer, "--gpu-name=sm_%d%d", device_compute_capability_major, device_compute_capability_minor);
-
-    const char* ptx_compile_options[] = {
-        nv_ptx_compile_line_buffer,
-        "--compile-only"
-    };
-    const size_t num_ptx_compile_options = 2;
-
-    nvPTXCompilerHandle nvptx_compiler;
-    nvptxCheck(
-        nvPTXCompilerCreate(
-            &nvptx_compiler,
-            required,
-            rendered_ptx
-        )
-    );
-        
-    nvPTXCompileResult result =
-        nvPTXCompilerCompile(
-            nvptx_compiler,
-            num_ptx_compile_options,
-            ptx_compile_options
-        );
-
-    if (result != NVPTXCOMPILE_SUCCESS) {
-        nvptx_print_error_log(nvptx_compiler);
-        assert( false );
-        exit(1);
-    }
-
-    size_t sass_image_size;
-    nvptxCheck( 
-        nvPTXCompilerGetCompiledProgramSize(
-            nvptx_compiler, 
-            &sass_image_size
-        )
-    );
-    void* sass_image = malloc(sass_image_size);
-
-    nvptxCheck(
-        nvPTXCompilerGetCompiledProgram(
-            nvptx_compiler, 
-            sass_image
-        )
-    );
-
-    CUcontext cu_context;
-    cuCheck( cuContextCreate(&cu_context, cu_device) );
-
-    CUmodule module;
-    cuCheck( cuModuleLoadDataEx(&module, sass_image, 0, NULL, NULL) );
-
-    unsigned int function_count;
-    cuCheck( cuModuleGetFunctionCount(&function_count, module) );
-
-    ASSERT( function_count == num_injects );
-    CUfunction* functions = (CUfunction*)malloc(function_count * sizeof(CUfunction));
-
-    cuCheck( cuModuleEnumerateFunctions(functions, function_count, module) );
-
-    // for (size_t i = 0; i < function_count; i++) {
-    //     const char* func_name;
-    //     cuCheck( cuFuncGetName(&func_name, functions[i]) );
-    //     printf("name: %s\n", func_name);
-    // }
-
-    free(sass_image);
-    free(ptx_stubs);
-    free(stack_ptx_workspace);
-    free(buffer);
-
-    CUdeviceptr d_outs;
-    cuCheck( cuMemAlloc(&d_outs, function_count * sizeof(float)) );
-
-    for (size_t i = 0; i < function_count; i++) {
-        CUdeviceptr d_out = d_outs + i * sizeof(float);
-        CUfunction cu_function = functions[i];
-
+    time_start = omp_get_wtime();
+    for (int i = 0; i < num_kernels; i++) {
+        CUdeviceptr d_c = d_cs + (size_t)i * d_c_matrix_size;
         void* args[] = {
-            (void*)&d_out
+            (void*)&M,
+            (void*)&N,
+            (void*)&K,
+            (void*)&d_a,
+            (void*)&lda,
+            (void*)&d_b,
+            (void*)&ldb,
+            (void*)&d_c,
+            (void*)&ldc
         };
-        
+
         cuCheck( 
             cuLaunchKernel(
-                cu_function,
+                functions[i],
                 1, 1, 1,
-                1, 1, 1,
+                block_dim, 1, 1,
                 0, 0, 
                 args,
                 NULL
             )
         );
     }
-
     cuCheck( cuCtxSynchronize() );
-    cuCheck( cuModuleUnload(module) );
+    time_end = omp_get_wtime();
+    printf(
+        "Ran Random Gemm Kernels (%d kernels, 1 cuda stream, %f seconds)\n",
+        num_kernels,
+        (time_end - time_start)
+    );
 
-    float* h_outs = (float*)malloc(function_count * sizeof(float));
-    cuCheck( cuMemcpyDtoH(h_outs, d_outs, function_count * sizeof(float)) );
-
-    for (size_t i = 0; i < function_count; i++) {
-        ASSERT( h_outs[i] == (float)(i + 8) );
+    if (MATRIX_PRINT_RESULTS) {
+        for (int i = 0; i < num_kernels; i++) {
+            CUdeviceptr d_c = d_cs + (size_t)i * d_c_matrix_size;
+            cuCheck( cuMemcpyDtoH(h_c, d_c, d_c_matrix_size) );
+            const char* name;
+            cuCheck( cuFuncGetName(&name, functions[i]));
+            printf("Kernel (%s):\n", name);
+            print_instruction_layout(instruction_layouts[i]);
+            printf("------------------------\n");
+            print_matrix(M, N, h_c, ldc, MATRIX_PRINT_LIMIT);
+            printf("------------------------\n");
+        }
     }
+    
+    cuCheck( cuMemFree(d_a) );
+    cuCheck( cuMemFree(d_b) );
+    cuCheck( cuMemFree(d_cs) );
 
-    printf("OK\n");
+    free(h_a);
+    free(h_b);
+    free(h_c);
 
-    free(h_outs);
-    cuCheck( cuMemFree(d_outs) );
-#endif
+    free(functions);
+    cuCheck( cuModuleUnload(module) );
+    cuCheck( cuStreamDestroy(stream) );
+    cuCheck( cuCtxDestroy(cu_context) );
 }

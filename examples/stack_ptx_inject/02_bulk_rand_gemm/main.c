@@ -75,7 +75,7 @@ typedef struct {
 #define _ALIGNMENT 16 // Standard malloc alignment
 #define _ALIGNMENT_UP(size, align) (((size) + (align) - 1) & ~((align) - 1))
 
-#define NUM_RAND_GEMM_KERNELS           2048
+#define NUM_RAND_GEMM_KERNELS           16
 // MAX_NUM_CPU_THREADS 0 will mean we'll use all threads found.
 #define MAX_NUM_CPU_THREADS             0
 
@@ -87,7 +87,7 @@ typedef struct {
 #define SASS_IMAGE_STORAGE              (100ULL * (1ULL << 10))
 
 // Prints the InstructionLayout and the related matrix
-#define MATRIX_PRINT_RESULTS            0
+#define MATRIX_PRINT_RESULTS            1
 // Number of rows and columns to print of the matrix
 #define MATRIX_PRINT_LIMIT              5
 

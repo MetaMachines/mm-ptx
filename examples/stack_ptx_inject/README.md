@@ -59,11 +59,12 @@ An example of running a mma.sync f32 tf32 instruction. Shows using convert instr
 ## 04_half_type
 An example of running both f16 and f16x2 types. Shows using the f16x2 as a datatype and then representing it as a vector of 2 f16 types.
 
-## 05_bulk_rand_gemm_packed
-
-**IN PROGRESS**
+## 05_bulk_rand_simple_packed
 
 This example will duplicate the contents of kernel.cu into a new kernel CUDA file 128 times, adjusting the global function name and inject site name by its index. This seems to be the best way to pack multiple kernels in to one PTX source. Simple PTX code can be duplicated but this gets tricky if the PTX file already has non-inlined device functions that will be duplicated also and cause compilation errors.
 
 From our tests, packing 128 CuTe f32 gemm kernels in to one PTX source causes compilation for the aggregate to speed up by 3x. In this example CMake handles the compilation of the CUDA source with 128 duplicated kernels. This example loads the compiled PTX and creates 128 simple Stack PTX programs to run out of one CUBIN.
 
+## 06_bulk_rand_gemm_packed
+
+This example does the same as 05_bulk_rand_simple_packed but does it with a simt CuTe kernel. Dial the amount of packed kernels in the CMakeLists.txt with "NUM_KERNEL_REPLICATIONS". It's results match 02_bulk_rand_gemm but with the PTX kernels all smashed in to the same file. 02_bulk_rand_gemm compiles with all visible CPU cores and then uses nvJitLink on a single core to merge them all in to one cubin.
