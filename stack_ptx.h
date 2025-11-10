@@ -32,12 +32,12 @@
 
 #define STACK_PTX_VERSION_MAJOR 0 //!< Stack PTX major version.
 #define STACK_PTX_VERSION_MINOR 1 //!< Stack PTX minor version.
-#define STACK_PTX_VERSION_PATCH 0 //!< Stack PTX patch version.
+#define STACK_PTX_VERSION_PATCH 2 //!< Stack PTX patch version.
 
 /**
  * \brief String representation of the Stack PTX library version (e.g., "0.1.0").
  */
-#define STACK_PTX_VERSION_STRING "0.1.0"
+#define STACK_PTX_VERSION_STRING "0.1.2"
 
 #define STACK_PTX_VERSION (STACK_PTX_VERSION_MAJOR * 10000 + STACK_PTX_VERSION_MINOR * 100 + STACK_PTX_VERSION_PATCH)
 
@@ -362,7 +362,8 @@ STACK_PTX_PUBLIC_DEC StackPtxResult stack_ptx_compile(
 #endif // STACK_PTX_H_INCLUDE
 
 #ifdef STACK_PTX_IMPLEMENTATION
-#undef STACK_PTX_IMPLEMENTATION
+#ifndef STACK_PTX_IMPLEMENTATION_ONCE
+#define STACK_PTX_IMPLEMENTATION_ONCE
 
 #include <stdarg.h>
 #include <stdlib.h>
@@ -1890,4 +1891,5 @@ stack_ptx_compile(
 	return STACK_PTX_SUCCESS;
 }
 
+#endif // STACK_PTX_IMPLEMENTATION_ONCE
 #endif // STACK_PTX_IMPLEMENTATION

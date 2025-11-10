@@ -32,12 +32,12 @@
 
 #define PTX_INJECT_VERSION_MAJOR 0 //!< PTX Inject major version.
 #define PTX_INJECT_VERSION_MINOR 1 //!< PTX Inject minor version.
-#define PTX_INJECT_VERSION_PATCH 1 //!< PTX Inject patch version.
+#define PTX_INJECT_VERSION_PATCH 2 //!< PTX Inject patch version.
 
 /**
  * \brief String representation of the PTX Inject library version (e.g., "0.1.0").
  */
-#define PTX_INJECT_VERSION_STRING "0.1.1"
+#define PTX_INJECT_VERSION_STRING "0.1.2"
 
 #define PTX_INJECT_VERSION (PTX_INJECT_VERSION_MAJOR * 10000 + PTX_INJECT_VERSION_MINOR * 100 + PTX_INJECT_VERSION_PATCH)
 
@@ -397,7 +397,8 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_render_ptx(
 #endif /* PTX_INJECT_H_INCLUDE */
 
 #ifdef PTX_INJECT_IMPLEMENTATION
-#undef PTX_INJECT_IMPLEMENTATION
+#ifndef PTX_INJECT_IMPLEMENTATION_ONCE
+#define PTX_INJECT_IMPLEMENTATION_ONCE
 
 #define _PTX_INJECT_ALIGNMENT 16 // Standard malloc alignment
 #define _PTX_INJECT_ALIGNMENT_UP(size, align) (((size) + (align) - 1) & ~((align) - 1))
@@ -1874,4 +1875,5 @@ ptx_inject_render_ptx(
     return PTX_INJECT_SUCCESS;
 }
 
+#endif // PTX_INJECT_IMPLEMENTATION_ONCE
 #endif // PTX_INJECT_IMPLEMENTATION
