@@ -230,13 +230,13 @@ main() {
 
     static const StackPtxInstruction mma_sync_tf32[] = {
         stack_ptx_encode_special_register_tid_x,
-        stack_ptx_encode_ptx_instruction_cvt_rn_f32_s32,    // a0 is tid
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,    // a0 is tid
         stack_ptx_encode_special_register_tid_x,
-        stack_ptx_encode_ptx_instruction_cvt_rn_f32_s32, 
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32, 
         stack_ptx_encode_constant_f32(2.0f),
         stack_ptx_encode_ptx_instruction_mul_ftz_f32,       // a1 is 32 * tid
         stack_ptx_encode_special_register_tid_x,
-        stack_ptx_encode_ptx_instruction_cvt_rn_f32_s32,    // b0 is tid
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,    // b0 is tid
         stack_ptx_encode_ptx_instruction_cvt_rna_tf32_f32,  // convert a0, a1 and b0 to tf32
         stack_ptx_encode_ptx_instruction_cvt_rna_tf32_f32,
         stack_ptx_encode_ptx_instruction_cvt_rna_tf32_f32,

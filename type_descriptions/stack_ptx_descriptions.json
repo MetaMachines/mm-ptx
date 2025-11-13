@@ -56,7 +56,7 @@
     { "ptx": "selp.f32",            "args": ["F32", "F32", "PRED"], "rets": ["F32"]                             },
 
     { "ptx": "cvt.rna.tf32.f32",    "args": ["F32"],                "rets": ["TF32"]                            },
-    { "ptx": "cvt.rn.f32.s32",      "args": ["U32"],                "rets": ["F32"]                             },
+    { "ptx": "cvt.rn.f32.u32",      "args": ["U32"],                "rets": ["F32"]                             },
 
     { "ptx": "mma.sync.aligned.m16n8k4.row.col.f32.tf32.tf32.f32",  "args": ["V2_TF32", "V1_TF32", "V4_F32"], "rets":["V4_F32"], "aligned":true },
 
