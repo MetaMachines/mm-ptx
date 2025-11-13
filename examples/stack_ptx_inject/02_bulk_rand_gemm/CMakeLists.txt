@@ -27,4 +27,5 @@ target_link_libraries(
     CUDA::nvJitLink
     OpenMP::OpenMP_C
     m
+    mm_ptx_headers
 )

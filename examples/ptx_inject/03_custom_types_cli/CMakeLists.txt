@@ -32,6 +32,11 @@ include_directories("${GENERATED_INC_DIR}")
 
 # Compile plugin using the registry.
 add_library(custom_types MODULE custom_types_plugin.c) # .so/.dylib/.dll
+
+target_link_libraries(
+  custom_types
+  mm_ptx_headers
+)
 target_include_directories(custom_types PRIVATE .)
 target_include_directories(custom_types PRIVATE "${GENERATED_INC_DIR}")
 add_dependencies(custom_types ptx_types_headers)
@@ -74,6 +79,7 @@ target_link_libraries(
     CUDA::nvrtc
     CUDA::nvptxcompiler_static
     m
+    mm_ptx_headers
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE "${GENERATED_INC_DIR}")

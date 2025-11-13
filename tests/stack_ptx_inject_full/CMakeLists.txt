@@ -14,4 +14,5 @@ target_link_libraries(
     CUDA::nvptxcompiler_static
     CUDA::cuda_driver
     m
+    mm_ptx_headers
 )

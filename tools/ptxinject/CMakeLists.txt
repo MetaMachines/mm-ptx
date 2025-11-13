@@ -9,6 +9,11 @@ include_directories(.)
 # Add executable
 add_executable(${PROJECT_NAME} main.c)
 
+target_link_libraries(
+    ${PROJECT_NAME}
+    mm_ptx_headers
+)
+
 # Platform-specific (e.g., for Windows polyfills)
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE _WIN32)

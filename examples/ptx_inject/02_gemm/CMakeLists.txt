@@ -23,4 +23,5 @@ target_link_libraries(
     CUDA::nvrtc
     CUDA::nvptxcompiler_static
     m
+    mm_ptx_headers
 )

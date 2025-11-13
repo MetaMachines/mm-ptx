@@ -17,10 +17,18 @@ if(CUDA_MAJOR_VERSION EQUAL 13)
 	add_definitions(-DCUDA_VERSION_13) 
 endif()
 
-include_directories(generated_headers)
-include_directories(helpers)
-include_directories(thirdparty)
-include_directories(.)
+add_library(mm_ptx_headers INTERFACE)
+
+target_include_directories(mm_ptx_headers INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}               # root (.)
+    ${CMAKE_CURRENT_SOURCE_DIR}/generated_headers
+    ${CMAKE_CURRENT_SOURCE_DIR}/helpers
+    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+)
+
+if(CUDA_MAJOR_VERSION EQUAL 13)
+    target_compile_definitions(mm_ptx_headers INTERFACE CUDA_VERSION_13)
+endif()
 
 add_subdirectory(tools/ptxinject)
 add_subdirectory(tests)

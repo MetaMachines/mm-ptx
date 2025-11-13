@@ -7,4 +7,8 @@ add_executable(
     main.c
 )
 
+target_link_libraries(
+    ${PROJECT_NAME}
+    mm_ptx_headers
+)
 
