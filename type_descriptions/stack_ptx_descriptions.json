@@ -8,7 +8,8 @@
     { "name": "PRED",   "literal_prefix": "pred" },
     { "name": "TF32",   "literal_prefix": "b32"  },
     { "name": "F16",    "literal_prefix": "b16"  },
-    { "name": "F16X2",  "literal_prefix": "b32"  }
+    { "name": "F16X2",  "literal_prefix": "b32"  },
+    { "name": "U8",     "literal_prefix": "u8"   }
   ],
 
   "arg_types": [
@@ -23,7 +24,9 @@
     { "name": "PRED",     "stack_type": "PRED"                      },
     { "name": "F16",      "stack_type": "F16"                       },
     { "name": "F16X2",    "stack_type": "F16X2"                     },
-    { "name": "V2_F16",   "stack_type": "F16",  "num_vec_elems":2   }
+    { "name": "V2_F16",   "stack_type": "F16",  "num_vec_elems":2   },
+    { "name": "U8",       "stack_type": "U8"                        },
+    { "name": "V4_U8",    "stack_type": "U8",   "num_vec_elems":4   }
   ],
 
   "instructions": [
@@ -61,7 +64,10 @@
     { "ptx": "mma.sync.aligned.m16n8k4.row.col.f32.tf32.tf32.f32",  "args": ["V2_TF32", "V1_TF32", "V4_F32"], "rets":["V4_F32"], "aligned":true },
 
     { "ptx": "mov.b32",             "args": ["F16X2"],              "rets": ["V2_F16"], "display": "f16x2_to_v2_f16"},
-    { "ptx": "cvt.f32.f16",         "args": ["F16"],                "rets": ["F32"],    "display": "f16_to_f32"}
+    { "ptx": "cvt.f32.f16",         "args": ["F16"],                "rets": ["F32"],    "display": "f16_to_f32"},
+
+    { "ptx": "mov.b32",             "args": ["U32"],                "rets": ["V4_U8"],  "display":  "u32_to_v4_u8"},
+    { "ptx": "cvt.u32.u8",          "args": ["U8"],                 "rets": ["U32"]                               }
   ],
 
   "special_registers": [
