@@ -40,6 +40,68 @@ INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
 
 static const int execution_limit = 100;
 
+enum InjectSite {
+    INJECT_MULTIPLY,
+    INJECT_ACCUMULATE,
+    INJECT_EPILOGUE,
+    INJECT_NUM_SITES
+};
+
+typedef struct {
+    const char* name;  // "multiply", "accumulate", "epilogue"
+    size_t idx;        // filled at runtime via ptx_inject_inject_info_by_name
+} InjectSiteInfo;
+
+static InjectSiteInfo g_inject_sites[INJECT_NUM_SITES] = {
+    [INJECT_MULTIPLY]   = { "multiply",   0 },
+    [INJECT_ACCUMULATE] = { "accumulate", 0 },
+    [INJECT_EPILOGUE]   = { "epilogue",   0 },
+};
+
+enum Register {
+    REGISTER_MULTIPLY_OUTPUT_DIFF,
+    REGISTER_MULTIPLY_INPUT_V_A,
+    REGISTER_MULTIPLY_INPUT_V_B,
+    REGISTER_ACCUMULATE_OUTPUT_V_C_OUT,
+    REGISTER_ACCUMULATE_INPUT_V_C,
+    REGISTER_ACCUMULATE_INPUT_DIFF,
+    REGISTER_EPILOGUE_MODIFY_V_C,
+    REGISTER_NUM_ENUMS
+};
+
+static StackPtxRegister registers[] = {
+    [REGISTER_MULTIPLY_OUTPUT_DIFF]      = { NULL, STACK_PTX_STACK_TYPE_F32 },
+    [REGISTER_MULTIPLY_INPUT_V_A]        = { NULL, STACK_PTX_STACK_TYPE_F32 },
+    [REGISTER_MULTIPLY_INPUT_V_B]        = { NULL, STACK_PTX_STACK_TYPE_F32 },
+    [REGISTER_ACCUMULATE_OUTPUT_V_C_OUT] = { NULL, STACK_PTX_STACK_TYPE_F32 },
+    [REGISTER_ACCUMULATE_INPUT_V_C]      = { NULL, STACK_PTX_STACK_TYPE_F32 },
+    [REGISTER_ACCUMULATE_INPUT_DIFF]     = { NULL, STACK_PTX_STACK_TYPE_F32 },
+    [REGISTER_EPILOGUE_MODIFY_V_C]       = { NULL, STACK_PTX_STACK_TYPE_F32 },
+};
+static const size_t num_registers = REGISTER_NUM_ENUMS;
+
+typedef struct {
+    enum InjectSite site;
+    const char* var_name;   // name as seen in PTX_INJECT annotations
+    enum Register reg;      // which entry in registers[] to fill
+} RegisterBinding;
+
+static const RegisterBinding g_register_bindings[] = {
+    // multiply
+    { INJECT_MULTIPLY,   "diff",    REGISTER_MULTIPLY_OUTPUT_DIFF      },
+    { INJECT_MULTIPLY,   "v_a",     REGISTER_MULTIPLY_INPUT_V_A        },
+    { INJECT_MULTIPLY,   "v_b",     REGISTER_MULTIPLY_INPUT_V_B        },
+
+    // accumulate
+    { INJECT_ACCUMULATE, "v_c_out", REGISTER_ACCUMULATE_OUTPUT_V_C_OUT },
+    { INJECT_ACCUMULATE, "v_c",     REGISTER_ACCUMULATE_INPUT_V_C      },
+    { INJECT_ACCUMULATE, "diff",    REGISTER_ACCUMULATE_INPUT_DIFF     },
+
+    // epilogue
+    { INJECT_EPILOGUE,   "v_c",     REGISTER_EPILOGUE_MODIFY_V_C       },
+};
+static const size_t g_num_register_bindings = sizeof(g_register_bindings) / sizeof(g_register_bindings[0]);
+
 static
 void
 run_custom_mma(
@@ -140,40 +202,12 @@ main() {
     printf("\n");
 
     size_t num_injects_found;
-    ptxInjectCheck( ptx_inject_num_injects(ptx_inject, &num_injects_found) );
+    ptxInjectCheck(ptx_inject_num_injects(ptx_inject, &num_injects_found));
+    ASSERT(num_injects_found == INJECT_NUM_SITES);
 
-    // We should have 3 injects inside the gemm, multiply, accumulate and epilogue
-    ASSERT(num_injects_found == 3);
-
-    enum Register {
-        REGISTER_MULTIPLY_OUTPUT_DIFF,
-        REGISTER_MULTIPLY_INPUT_V_A,
-        REGISTER_MULTIPLY_INPUT_V_B,
-        REGISTER_ACCUMULATE_OUTPUT_V_C_OUT,
-        REGISTER_ACCUMULATE_INPUT_V_C,
-        REGISTER_ACCUMULATE_INPUT_DIFF,
-        REGISTER_EPILOGUE_MODIFY_V_C,
-        REGISTER_NUM_ENUMS
-    };
-
-    StackPtxRegister registers[] = {
-        [REGISTER_MULTIPLY_OUTPUT_DIFF] =       {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32 },
-        [REGISTER_MULTIPLY_INPUT_V_A] =         {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32 },
-        [REGISTER_MULTIPLY_INPUT_V_B] =         {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32 },
-        [REGISTER_ACCUMULATE_OUTPUT_V_C_OUT] =  {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32 },
-        [REGISTER_ACCUMULATE_INPUT_V_C] =       {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32 },
-        [REGISTER_ACCUMULATE_INPUT_DIFF] =      {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32 },
-        [REGISTER_EPILOGUE_MODIFY_V_C] =        {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32 },
-    };
-
-    // We now need to ask which index in the stub buffer each inject needs to be at
-    size_t multiply_func_idx;
-    size_t accumulate_func_idx;
-    size_t epilogue_func_idx;
-
-    ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "multiply", &multiply_func_idx, NULL, NULL) );
-    ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "accumulate", &accumulate_func_idx, NULL, NULL) );
-    ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "epilogue", &epilogue_func_idx, NULL, NULL) );
+    for (size_t s = 0; s < INJECT_NUM_SITES; ++s) {
+        ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, g_inject_sites[s].name, &g_inject_sites[s].idx, NULL, NULL) );
+    }
 
     char* multiply_stub_buffer = (char*)malloc(STUB_BUFFER_SIZE);
     char* accumulate_stub_buffer = (char*)malloc(STUB_BUFFER_SIZE);
@@ -181,22 +215,22 @@ main() {
 
     const char* ptx_stubs[3];
 
+    // We now need to ask which index in the stub buffer each inject needs to be at
+    size_t multiply_func_idx   = g_inject_sites[INJECT_MULTIPLY].idx;
+    size_t accumulate_func_idx = g_inject_sites[INJECT_ACCUMULATE].idx;
+    size_t epilogue_func_idx   = g_inject_sites[INJECT_EPILOGUE].idx;
+    
     // Set up the buffers to go in to the proper indicies as specified by the inject_info function calls.
     ptx_stubs[multiply_func_idx] = multiply_stub_buffer;
     ptx_stubs[accumulate_func_idx] = accumulate_stub_buffer;
     ptx_stubs[epilogue_func_idx] = epilogue_stub_buffer;
 
-    // Grab the "normalized" register names of the different operators inside the gemm.
-    // The multiply, accumulate and epilogue operations.
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, multiply_func_idx, "diff", NULL, NULL, NULL, &registers[REGISTER_MULTIPLY_OUTPUT_DIFF].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, multiply_func_idx, "v_a", NULL, NULL, NULL, &registers[REGISTER_MULTIPLY_INPUT_V_A].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, multiply_func_idx, "v_b", NULL, NULL, NULL, &registers[REGISTER_MULTIPLY_INPUT_V_B].name) );
+    for (size_t i = 0; i < g_num_register_bindings; ++i) {
+        const RegisterBinding* b = &g_register_bindings[i];
+        size_t inject_idx = g_inject_sites[b->site].idx;
 
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, accumulate_func_idx, "v_c_out", NULL, NULL, NULL, &registers[REGISTER_ACCUMULATE_OUTPUT_V_C_OUT].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, accumulate_func_idx, "v_c", NULL, NULL, NULL, &registers[REGISTER_ACCUMULATE_INPUT_V_C].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, accumulate_func_idx, "diff", NULL, NULL, NULL, &registers[REGISTER_ACCUMULATE_INPUT_DIFF].name) );
-
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, epilogue_func_idx, "v_c", NULL, NULL, NULL, &registers[REGISTER_EPILOGUE_MODIFY_V_C].name) );
+        ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_idx, b->var_name, NULL, NULL, NULL, &registers[b->reg].name) );
+    }
 
     // We need the multiply instructions to be assigned to the "diff" register name
     const size_t multiply_requests[] = { REGISTER_MULTIPLY_OUTPUT_DIFF };
@@ -208,7 +242,7 @@ main() {
 
     // We need the epilogue instructions to be assigned to the "v_c" register name.
     // This register has a modify type so it is used now as an output and later as an input as well.
-    const size_t epilogue_requests[] = { REGISTER_ACCUMULATE_OUTPUT_V_C_OUT };
+    const size_t epilogue_requests[] = { REGISTER_EPILOGUE_MODIFY_V_C };
     static const size_t num_epilogue_requests = STACK_PTX_ARRAY_NUM_ELEMS(epilogue_requests);
 
     cuCheck( cuInit(0) );
