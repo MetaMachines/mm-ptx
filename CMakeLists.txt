@@ -30,6 +30,7 @@ if(CUDA_MAJOR_VERSION EQUAL 13)
     target_compile_definitions(mm_ptx_headers INTERFACE CUDA_VERSION_13)
 endif()
 
-add_subdirectory(tools/ptxinject)
+add_subdirectory(thirdparty)
+add_subdirectory(tools)
 add_subdirectory(tests)
 add_subdirectory(examples)

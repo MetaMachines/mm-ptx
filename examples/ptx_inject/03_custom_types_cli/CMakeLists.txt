@@ -3,7 +3,7 @@ project(ptx_inject_03_custom_types_cli)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 set(PTX_TYPES_JSON   "${CMAKE_CURRENT_SOURCE_DIR}/custom_types.json" CACHE FILEPATH "Path to PTX Inject data_type_infos JSON")
-set(PTX_GEN_SCRIPT   "${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/ptx_inject_generate_infos.py" CACHE FILEPATH "Path to header generator script")
+set(PTX_GEN_SCRIPT   "${MM_PTX_TOOLS_DIR}/ptx_inject_generate_infos.py" CACHE FILEPATH "Path to header generator script")
 
 set(GENERATED_INC_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(GENERATED_HDR     "${GENERATED_INC_DIR}/custom_types.h")
@@ -27,7 +27,7 @@ set_source_files_properties(${GENERATED_HDR}
 add_custom_target(ptx_types_headers DEPENDS ${GENERATED_HDR})
 
 include_directories(.)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/ptxinject)
+include_directories(${MM_PTX_TOOLS_DIR}/ptxinject)
 include_directories("${GENERATED_INC_DIR}")
 
 # Compile plugin using the registry.

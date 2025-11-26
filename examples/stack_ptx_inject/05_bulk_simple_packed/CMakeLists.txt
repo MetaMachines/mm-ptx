@@ -8,7 +8,7 @@ set(REPLICATED_PROCESSED_CUDA ${CMAKE_CURRENT_BINARY_DIR}/processed_cuda/replica
 set(ANNOTATED_PTX ${CMAKE_CURRENT_BINARY_DIR}/annotated_ptx/kernel.ptx)
 make_directory(${CMAKE_CURRENT_BINARY_DIR}/annotated_ptx)
 
-set(CUDA_REPLICATOR_SCRIPT  ${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/cuda_kernel_replicator.py CACHE FILEPATH "Path to CUDA kernel replicator script")
+set(CUDA_REPLICATOR_SCRIPT  ${MM_PTX_TOOLS_DIR}/cuda_kernel_replicator.py CACHE FILEPATH "Path to CUDA kernel replicator script")
 
 find_package(OpenMP REQUIRED)
 
