@@ -56,6 +56,8 @@
     { "ptx": "tanh.approx.f32",     "args": ["F32"],                "rets": ["F32"]                             },
 
     { "ptx": "setp.lt.ftz.f32",     "args": ["F32", "F32"],         "rets": ["PRED"]                            },
+    { "ptx": "setp.eq.u32",         "args": ["U32", "U32"],         "rets": ["PRED"]                            },
+    { "ptx": "setp.ne.u32",         "args": ["U32", "U32"],         "rets": ["PRED"]                            },
     { "ptx": "selp.f32",            "args": ["F32", "F32", "PRED"], "rets": ["F32"]                             },
 
     { "ptx": "cvt.rna.tf32.f32",    "args": ["F32"],                "rets": ["TF32"]                            },
