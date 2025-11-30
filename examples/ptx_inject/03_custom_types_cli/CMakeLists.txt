@@ -2,8 +2,8 @@ project(ptx_inject_03_custom_types_cli)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-set(PTX_TYPES_JSON   "${CMAKE_CURRENT_SOURCE_DIR}/custom_types.json" CACHE FILEPATH "Path to PTX Inject data_type_infos JSON")
-set(PTX_GEN_SCRIPT   "${MM_PTX_TOOLS_DIR}/ptx_inject_generate_infos.py" CACHE FILEPATH "Path to header generator script")
+set(PTX_TYPES_JSON   "${CMAKE_CURRENT_SOURCE_DIR}/custom_types.json")
+set(PTX_GEN_SCRIPT   "${MM_PTX_TOOLS_DIR}/ptx_inject_generate_infos.py")
 
 set(GENERATED_INC_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(GENERATED_HDR     "${GENERATED_INC_DIR}/custom_types.h")
