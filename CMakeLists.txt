@@ -30,7 +30,15 @@ if(CUDA_MAJOR_VERSION EQUAL 13)
     target_compile_definitions(mm_ptx_headers INTERFACE CUDA_VERSION_13)
 endif()
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(mm_ptx_codegen)
+include(mm_ptx_process_cuda)
+include(mm_ptx_ptx_inject_types_plugin)
+
 add_subdirectory(thirdparty)
 add_subdirectory(tools)
 add_subdirectory(tests)
 add_subdirectory(examples)
+
+
