@@ -79,7 +79,7 @@ function(create_injected_ptx OUTPUT_VAR CUDA_SOURCE)
     add_custom_command(
         OUTPUT  "${ANNOTATED_PTX}"
         DEPENDS "${PROCESSED_CUDA}"
-        COMMAND nvcc -O3 -prec-sqrt=false -arch=native -ptx
+        COMMAND nvcc -O3 -arch=native -ptx
                 "${PROCESSED_CUDA}" -o "${ANNOTATED_PTX}"
                 ${_nvcc_includes}
         COMMENT "Compiling processed ${SOURCE_BASENAME}.cu to PTX"

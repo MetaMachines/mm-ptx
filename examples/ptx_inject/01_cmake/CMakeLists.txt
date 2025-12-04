@@ -11,7 +11,7 @@ add_custom_command(OUTPUT ${PROCESSED_CUDA}
 
 add_custom_command(OUTPUT ${ANNOTATED_PTX}
     DEPENDS ${PROCESSED_CUDA}
-    COMMAND nvcc -O3 -prec-sqrt=false -arch=native -ptx ${PROCESSED_CUDA} -o ${ANNOTATED_PTX}
+    COMMAND nvcc -O3 -arch=native -ptx ${PROCESSED_CUDA} -o ${ANNOTATED_PTX}
 )
 
 add_executable(${PROJECT_NAME} main.c)
