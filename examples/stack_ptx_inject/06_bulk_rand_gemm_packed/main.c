@@ -42,10 +42,7 @@
 #define INCBIN_PREFIX g_
 #include <incbin.h>
 
-#define STRING(x) #x
-#define XSTRING(x) STRING(x)
-
-INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
+INCTXT(annotated_ptx, PTX_KERNEL);
 
 // Prints the InstructionLayout and the related matrix
 #define MATRIX_PRINT_RESULTS            1

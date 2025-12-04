@@ -31,13 +31,10 @@
 #define INCBIN_PREFIX g_
 #include <incbin.h>
 
-#define STRING(x) #x
-#define XSTRING(x) STRING(x)
-
 // Use incbin to drag the kernel.ptx compiled from kernel.cu into this
 // compilation unit as a static string. kernel.cu was already processed by
 // the ptxinject binary and compiled with nvcc -ptx.
-INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
+INCTXT(annotated_ptx, PTX_KERNEL);
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 

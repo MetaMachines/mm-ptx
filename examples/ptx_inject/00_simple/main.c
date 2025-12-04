@@ -22,13 +22,10 @@
 #define INCBIN_PREFIX g_
 #include <incbin.h>
 
-#define STRING(x) #x
-#define XSTRING(x) STRING(x)
-
 /* Use incbin to bring the code from 00_simple.cu, allows easy editing of cuda source
 *   is replaced with g_annotated_cuda_src_data
 */
-INCTXT(annotated_cuda_src, XSTRING(CUDA_KERNEL));
+INCTXT(annotated_cuda_src, CUDA_KERNEL);
 
 #define STUB_BUFFER_SIZE 1000000ull
 

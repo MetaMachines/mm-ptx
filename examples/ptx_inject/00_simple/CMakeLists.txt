@@ -13,7 +13,7 @@ add_compile_options(
 
 add_executable(${PROJECT_NAME} main.c)
 set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/main.c OBJECT_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu)
-target_compile_definitions(${PROJECT_NAME} PRIVATE "CUDA_KERNEL=${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu")
+target_compile_definitions(${PROJECT_NAME} PRIVATE "CUDA_KERNEL=\"${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu\"")
 target_link_libraries(
     ${PROJECT_NAME}
     CUDA::cuda_driver

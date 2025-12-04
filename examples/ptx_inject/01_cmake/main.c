@@ -20,13 +20,10 @@
 #define INCBIN_PREFIX g_
 #include <incbin.h>
 
-#define STRING(x) #x
-#define XSTRING(x) STRING(x)
-
 /* Use incbin to bring the code from kernel.ptx, allows easy editing of cuda source
 *   is replaced with g_annotated_ptx_data
 */
-INCTXT(annotated_ptx, XSTRING(PTX_KERNEL));
+INCTXT(annotated_ptx, PTX_KERNEL);
 
 #define STUB_BUFFER_SIZE 1000000ull
 
