@@ -961,10 +961,21 @@ ptx_inject_process_cuda(
         bool is_commented = _ptx_inject_is_str_line_commented(annotated_cuda_src, start_of_inject);
         if (is_commented) {
             // A comment exists before "start_of_inject", skip ahead and continue.
+            // But write out the commented line also.
+            _PTX_INJECT_CHECK_RET(
+                _ptx_inject_snprintf_append(
+                    processed_cuda_buffer,
+                    processed_cuda_buffer_size,
+                    processed_cuda_bytes_written_out,
+                    "%.*s",
+                    start_of_inject - src_ptr + strlen(_ptx_inject_cuda_header_str_start),
+                    src_ptr
+                )
+            );
             src_ptr = start_of_inject + strlen(_ptx_inject_cuda_header_str_start);
             continue;
-        };
-        
+        }
+
         _PTX_INJECT_CHECK_RET(
             _ptx_inject_snprintf_append(
                 processed_cuda_buffer,
