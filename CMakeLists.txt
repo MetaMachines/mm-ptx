@@ -38,7 +38,21 @@ include(mm_ptx_ptx_inject_types_plugin)
 
 add_subdirectory(thirdparty)
 add_subdirectory(tools)
-add_subdirectory(tests)
-add_subdirectory(examples)
+
+set(MMPTX_BUILD_TESTS_DEFAULT ON)
+option(MMPTX_BUILD_TESTS "Build mm-ptx test" ${MMPTX_BUILD_TESTS_DEFAULT})
+message(STATUS "MMPTX_BUILD_TESTS = ${MMPTX_BUILD_TESTS}")
+
+if(MMPTX_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
+
+set(MMPTX_BUILD_EXAMPLES_DEFAULT ON)
+option(MMPTX_BUILD_EXAMPLES "Build mm-ptx examples" ${MMPTX_BUILD_EXAMPLES_DEFAULT})
+message(STATUS "MMPTX_BUILD_EXAMPLES = ${MMPTX_BUILD_EXAMPLES}")
+
+if(MMPTX_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 
