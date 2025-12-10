@@ -293,12 +293,6 @@ main() {
     static const size_t epilogue_requests[] = { REGISTER_EPILOGUE_MODIFY_V_C };
     static const size_t num_epilogue_requests = STACK_PTX_ARRAY_NUM_ELEMS(epilogue_requests);
 
-    typedef struct {
-        size_t mulitply_func_idx;
-        size_t accumulate_func_idx;
-        size_t epilogue_func_idx;
-    } FuncIndices;
-
     // We're going to store it [num_funcs][3]
     size_t* reverse_indices = (size_t*)malloc(num_injects * sizeof(size_t));
 
