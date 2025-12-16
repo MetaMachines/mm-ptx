@@ -30,16 +30,17 @@
 #ifndef PTX_INJECT_H_INCLUDE
 #define PTX_INJECT_H_INCLUDE
 
-#define PTX_INJECT_VERSION_MAJOR 0 //!< PTX Inject major version.
-#define PTX_INJECT_VERSION_MINOR 1 //!< PTX Inject minor version.
-#define PTX_INJECT_VERSION_PATCH 2 //!< PTX Inject patch version.
+#define PTX_INJECT_VERSION_MAJOR 1 //!< PTX Inject major version.
+#define PTX_INJECT_VERSION_MINOR 0 //!< PTX Inject minor version.
+#define PTX_INJECT_VERSION_PATCH 0 //!< PTX Inject patch version.
 
 /**
- * \brief String representation of the PTX Inject library version (e.g., "0.1.0").
+ * \brief String representation of the PTX Inject library version (e.g., "1.0.0").
  */
-#define PTX_INJECT_VERSION_STRING "0.1.2"
+#define PTX_INJECT_VERSION_STRING "1.0.0"
 
 #define PTX_INJECT_VERSION (PTX_INJECT_VERSION_MAJOR * 10000 + PTX_INJECT_VERSION_MINOR * 100 + PTX_INJECT_VERSION_PATCH)
+
 
 #ifdef __cplusplus
 #define PTX_INJECT_PUBLIC_DEC extern "C"
@@ -49,58 +50,8 @@
 #define PTX_INJECT_PUBLIC_DEF
 #endif
 
-/**
- * \brief Helper to get static const sizes out of a static const array.
- */
-#define PTX_INJECT_ARRAY_NUM_ELEMS(array) sizeof((array)) / sizeof(*(array))
-
 #include <stddef.h>
 
-/**
- * \mainpage PTX Inject: A library for injecting PTX into compiled CUDA code.
- * 
- * \section usage Usage
- * 
- * This file contains all header declarations and source for the PTX Inject library.
- * 
- * To use include this library as a header where the definitions are needed. Include this file in only one compilation unit
- * to compile the library source with "PTX_INJECT_IMPLEMENTATION" defined. This looks like:
- * 
- * ```
- * #define PTX_INJECT_IMPLEMENTATION
- * #include <ptx_inject.h>
- * ```
- * or to include debugging help
- * ```
- * #define PTX_INJECT_DEBUG
- * #define PTX_INJECT_IMPLEMENTATION
- * #include <ptx_inject.h>
- * ```
- * PTX_INJECT_DEBUG will allow a debugger to assert at the site of the reported error from the library in the case
- * of a value that is not PTX_INJECT_SUCCESS.
- * 
- * You can set the PTX_INJECT_MAX_UNIQUE_INJECTS to something other than the current limit of 1024 by doing:
- * ```
- * #define PTX_INJECT_MAX_UNIQUE_INJECTS 2048
- * #define PTX_INJECT_IMPLEMENTATION
- * #include <ptx_inject.h>
- * ```
- * 
- * You can set the register prefix value for "normalizing" the register names across injection sites by doing:
- * ```
- * #define PTX_INJECT_STABLE_REGISTER_NAME_PREFIX "_x"
- * #define PTX_INJECT_IMPLEMENTATION
- * #include <ptx_inject.h>
- * ```
- * The default name is "_z"
- */
-
-/**
- * \brief PTX Inject status type returns
- *
- * \details The type is used for function status returns. All Ptx Inject library functions return their status, 
- * which can have the following values.
- */
 typedef enum {
     /** PTX Inject Operation was successful */
     PTX_INJECT_SUCCESS                              = 0,
@@ -142,151 +93,14 @@ typedef enum {
     PTX_INJECT_MUT_TYPE_NUM_ENUMS
 } PtxInjectMutType;
 
-typedef struct {
-    const char* name;
-    const char* register_type;
-    const char* mov_postfix;
-    char        register_char;
-    const char* register_cast_str;
-} PtxInjectDataTypeInfo;
-
 struct PtxInjectHandleImpl;
-/**
- * \brief Opaque structure representing a PTX Inject handle.
- */
 typedef struct PtxInjectHandleImpl* PtxInjectHandle;
 
-/**
- * \brief Converts a PtxInjectResult enum value to a human-readable string.
- *
- * \param[in] result The PtxInjectResult enum value to convert.
- * \return A null-terminated string describing the result or 
- * "PTX_INJECT_ERROR_INVALID_RESULT_ENUM" if `result` is out of bounds.
- * \remarks Thread-safe.
- */
-PTX_INJECT_PUBLIC_DEC const char* ptx_inject_result_to_string(PtxInjectResult result);
-
-/**
- * \brief Processes CUDA source code with annotations for PTX injection, supporting measure-and-allocate usage.
- * 
- * \details Looks for sections in cuda code like:
- * (Below example can't embed the forward-slash due to breaking comment)
- * 
- * __global__ 
- * void kernel(float* d_in, float* d_out) {
- *      const unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
- *      float x = d_in[tid];
- *      float y;
- * 
- *      (forward-slash)* PTX_INJECT func_name
- *          in  f32 x
- *          out f32 y
- *      *(forward-slash)
- * 
- *      d_out[tid] = y;
- * }
- * 
- * This specifies that `x` is a float input value and `y` is a float output value. `ptx_inject_process_cuda` will 
- * prepare the cuda source and return new cuda code in `processed_cuda_buffer`. This buffer should be compiled to 
- * PTX either with `nvcc` or `nvrtc`. A call to `ptx_inject_create` with the resulting PTX as the input buffer 
- * should allow querying details about the register names for `x` and `y` for inject `func_name` and will allow 
- * injecting new PTX referring to these register names with `ptx_inject_render_ptx`.
- * 
- * Valid mutation types are `in`, `out` and `mod`. These types respect the modification types used for 
- * inline-PTX as "", "=", or "+" respectively.
- * 
- * Data types are described using the PtxInjectDataTypeInfo structure. An example PtxInjectDataTypeInfo that only has f32 would be:
- * PtxInjectDataTypeInfo{ "f32", "f32", 'f', ""}
- * Where the first value 'f32' is the name to be found in the PTX_INJECT annotation.
- * The second value 'f32' is the register type that would be found in 'mov' instructions like 'mov.f32'
- * The third value 'f' is the register character found when declaring a register for an inline ptx assembly line
- * in cuda code i.e. "=f"(x), "+r"(y) etc..
- * The final value is to cast the cuda variable to a compatible data type for inline PTX assembly declarations.
- * for example "*(unsigned short*)&" where the actual inline assembly would then look like: "=r"(*(unsigned short*)&x)
- * where "x" would be declared in the cuda code as a "_half" type.
- * 
- * See the PTX ISA and Inline PTX documentation for more information.
- * 
- * Valid variable names are simple like `x` or `y` also supported are more complex names like `x[0]`, `x[1]` 
- * for array indexing (which is supported in inline-PTX) and `vec.x`, `vec.w` for `float4` like types (also supported by inline-PTX). 
- * If the input variable name is something like `x[ 0 ]` with spaces on the inside, only the exact string `x[ 0 ]` will 
- * reference it with `ptx_inject_variable_info_by_name`.
- *
- * \param[in] data_type_infos Array of structs describing the types that might be found in the PTX Inject annotations.
- * \param[in] num_data_type_infos Number of structs in the data_type_infos array.
- * \param[in] annotated_cuda_src Null-terminated string containing annotated CUDA source code.
- * \param[out] processed_cuda_buffer Buffer to store the processed CUDA source code. Can be NULL to measure the required buffer size.
- * \param[in] processed_cuda_buffer_size Size of the processed_cuda_buffer in bytes. Ignored if processed_cuda_buffer is NULL.
- * \param[out] processed_cuda_bytes_written_out Pointer to store the number of bytes written to processed_cuda_buffer, 
- * or the required buffer size if processed_cuda_buffer is NULL.
- * \param[out] num_inject_sites_out Pointer to store the number of injection sites found.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe. To measure the required buffer size, pass NULL for processed_cuda_buffer and anything for 
- * processed_cuda_buffer_size. The function will write the required size to processed_cuda_bytes_written_out. 
- * Then, allocate a buffer of at least that size and call the function again with the allocated buffer.
- */
-PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_process_cuda(
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
-    const char* annotated_cuda_src,
-    char* processed_cuda_buffer,
-    size_t processed_cuda_buffer_size,
-    size_t* processed_cuda_bytes_written_out,
-    size_t* num_inject_sites_out
-);
-
-/**
- * \brief Creates a PTX injection context from processed PTX source code.
- * 
- * \details `processed_ptx_src` should be ptx from `nvcc` or `nvrtc` where the input cuda code was PTX_INJECT annotated
- * cuda code passed through `ptx_inject_process_cuda`.
- *
- * \param[out] handle Pointer to a PtxInjectHandle to initialize.
- * \param[in] data_type_infos Array of structs describing the types that might be found in the PTX Inject annotations.
- * \param[in] num_data_type_infos Number of structs in the data_type_infos array.
- * \param[in] processed_ptx_src Null-terminated string containing processed PTX source code.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe.
- */
-PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_create(
-    PtxInjectHandle* handle, 
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
-    const char* processed_ptx_src
-);
-
-/**
- * \brief Destroys a PTX injection context and frees associated resources.
- *
- * \param[in] handle The PtxInjectHandle to destroy.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe.
- */
+PTX_INJECT_PUBLIC_DEF const char* ptx_inject_result_to_string(PtxInjectResult result);
+PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_create(PtxInjectHandle* handle, const char* processed_ptx_src);
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_destroy(PtxInjectHandle handle);
-
-/**
- * \brief Gets the number of unique inject sites found in the processed_ptx_src from the PtxInjectHandle.
- * 
- * \param[in] handle The PtxInjectHandle.
- * \param[out] num_injects_out The number of injects found in the processed_ptx_src.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe.
- */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_num_injects(const PtxInjectHandle handle, size_t* num_injects_out);
 
-/**
- * \brief Gets information about an inject by the name of the inject.
- * 
- * \param[in] handle The PtxInjectHandle.
- * \param[in] inject_name The name of the inject.
- * \param[out] inject_idx_out The index of the found inject. This will be used to setup the stub buffer for `ptx_inject_render_ptx`.
- * The stub buffers should be setup in the order of the inject index. Can pass NULL to have this field ignored.
- * \param[out] inject_num_args_out The number of variables or arguments specified by the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_num_sites_out The number of sites where the specified inject is duplicated. This will be more than one when
- * the inject is inlined to multiple sites or when it is in an unrolled loop. Can pass NULL to have this field ignored.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe.
- */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_name(
     const PtxInjectHandle handle,
     const char* inject_name,
@@ -295,19 +109,6 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_name(
     size_t* inject_num_sites_out 
 );
 
-/**
- * \brief Gets information about an inject by the index of the inject.
- * 
- * \param[in] handle The PtxInjectHandle.
- * \param[in] inject_idx The index of the inject with information stored in the PtxInjectHandle. Good for looping
- * through the injects in the handle. Use `ptx_inject_num_injects` for upper bound.
- * \param[out] inject_name_out The name of the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_num_args_out The number of variables or arguments specified by the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_num_sites_out The number of sites where the specified inject is duplicated. This will be more than one when
- * the inject is inlined to multiple sites or when it is in an unrolled loop. Can pass NULL to have this field ignored.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe.
- */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_index(
     const PtxInjectHandle handle,
     size_t inject_idx,
@@ -316,75 +117,28 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_index(
     size_t* inject_num_sites_out
 );
 
-/**
- * \brief Gets information about an inject variable by the index of the inject and the name of the variable.
- * 
- * \param[in] handle The PtxInjectHandle.
- * \param[in] inject_idx The index of the inject with information stored in the PtxInjectHandle. Good for looping
- * through the injects in the handle. Use `ptx_inject_num_injects` for upper bound.
- * \param[in] inject_variable_name The name of the inject variable to find in the inject.
- * \param[out] inject_variable_arg_idx_out The index of the found variable within the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_variable_mut_type_out The mutability of the variable found within the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_variable_data_type_idx_out The data type of the variable found within the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_variable_stable_register_name_out The name of the ptx register that refers to the variable in the inject. This is the 
- * "normalized" register name and will be stable for all inject sites that are duplicated in the case of being inlined or inside an unrolled loop. 
- * Can pass NULL to have this field ignored.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe.
- */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_variable_info_by_name(
     const PtxInjectHandle handle,
     size_t inject_idx,
     const char* inject_variable_name,
     size_t* inject_variable_arg_idx_out,
+    const char** inject_variable_register_name_out,
     PtxInjectMutType* inject_variable_mut_type_out,
-    size_t* inject_variable_data_type_idx_out,
-    const char** inject_variable_stable_register_name_out
+    const char** inject_variable_register_type_name_out,
+    const char** inject_variable_data_type_name_out
 );
 
-/**
- * \brief Gets information about an inject variable by the index of the inject and the name of the variable.
- * 
- * \param[in] handle The PtxInjectHandle.
- * \param[in] inject_idx The index of the inject with information stored in the PtxInjectHandle. Good for looping
- * through the injects in the handle. Use `ptx_inject_num_injects` for upper bound.
- * \param[in] inject_variable_arg_idx The index of the variable within the inject.
- * \param[out] inject_variable_name_out The name of the inject variable to find in the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_variable_mut_type_out The mutability of the variable found within the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_variable_data_type_out The data type of the variable found within the inject. Can pass NULL to have this field ignored.
- * \param[out] inject_variable_stable_register_name_out The name of the ptx register that refers to the variable in the inject. This is the 
- * "normalized" register name and will be stable for all inject sites that are duplicated in the case of being inlined or inside an unrolled loop. 
- * Can pass NULL to have this field ignored.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe.
- */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_variable_info_by_index(
     const PtxInjectHandle handle,
     size_t inject_idx,
     size_t inject_variable_arg_idx,
     const char** inject_variable_name_out,
+    const char** inject_variable_register_name_out,
     PtxInjectMutType* inject_variable_mut_type_out,
-    size_t* inject_variable_data_type_idx_out,
-    const char** inject_variable_stable_register_name_out
+    const char** inject_variable_register_type_name_out,
+    const char** inject_variable_data_type_name_out
 );
 
-/**
- * \brief Renders PTX code with injected stubs, supporting measure-and-allocate usage.
- *
- * \param[in] handle The PtxInjectHandle.
- * \param[in] ptx_stubs The array of null-terminated strings containing PTX stubs to inject. The ordering of the array should be relative to
- * the `inject_idx` obtained from either looping with `ptx_inject_num_injects` as the upper bound or from the `inject_idx_out` 
- * field from `ptx_inject_inject_info_by_name`.
- * \param[in] num_ptx_stubs The number of PTX stubs in the `ptx_stubs` array.
- * \param[out] rendered_ptx_buffer Buffer to store the rendered PTX code. Can be NULL to measure the required buffer size.
- * \param[in] rendered_ptx_buffer_size Size of the rendered_ptx_buffer in bytes. Ignored if rendered_ptx_buffer is NULL.
- * \param[out] rendered_ptx_bytes_written_out Pointer to store the number of bytes written to rendered_ptx_buffer, 
- * or the required buffer size if rendered_ptx_buffer is NULL.
- * \return PtxInjectResult indicating success or an error code.
- * \remarks Blocking, thread-safe. To measure the required buffer size, pass NULL for rendered_ptx_buffer and 0 for rendered_ptx_buffer_size. 
- * The function will write the required size to rendered_ptx_bytes_written_out. Then, allocate a buffer of at least that size and call the 
- * function again with the allocated buffer.
- */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_render_ptx(
     const PtxInjectHandle handle,
     const char* const* ptx_stubs,
@@ -405,25 +159,9 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_render_ptx(
 
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-static const char* const _ptx_inject_cuda_header_str_start =            "/* PTX_INJECT";
-static const char* const _ptx_inject_cuda_header_str_end =              "*/";
-static const char* const _ptx_inject_ptx_header_str_start =             "// PTX_INJECT_START";
-static const char* const _ptx_inject_ptx_header_str_end =               "// PTX_INJECT_END";
-
-// Prefix for register declarations for "normalized" register names.
-// Expect to show up like `.reg .f32 %z0;` `.reg .s32 %z1;` etc..
-#ifndef PTX_INJECT_STABLE_REGISTER_NAME_PREFIX
-#define PTX_INJECT_STABLE_REGISTER_NAME_PREFIX "z"
-#endif
-
-#ifndef PTX_INJECT_MAX_UNIQUE_INJECTS
-#define PTX_INJECT_MAX_UNIQUE_INJECTS 1024
-#endif // PTX_INJECT_MAX_UNIQUE_INJECTS
 
 #ifdef PTX_INJECT_DEBUG
 #include <assert.h>
@@ -461,11 +199,19 @@ static const char* const _ptx_inject_ptx_header_str_end =               "// PTX_
     } while(0);
 #endif // PTX_INJECT_DEBUG
 
+static const char* const _ptx_inject_ptx_header_str_start =             "// PTX_INJECT_START";
+static const char* const _ptx_inject_ptx_header_str_end =               "// PTX_INJECT_END";
+
+#ifndef PTX_INJECT_MAX_UNIQUE_INJECTS
+#define PTX_INJECT_MAX_UNIQUE_INJECTS 1024
+#endif // PTX_INJECT_MAX_UNIQUE_INJECTS
+
 typedef struct {
     PtxInjectMutType mut_type;
-    size_t data_type_idx;
     const char* name;
-    const char* stable_register_name;
+    const char* register_type_name;
+    const char* data_type_name;
+    const char* register_name;
 } PtxInjectInjectionArg;
 
 typedef struct {
@@ -501,18 +247,6 @@ struct PtxInjectHandleImpl {
     size_t names_blob_size;
 };
 
-typedef struct {
-    const char* str;
-    const char* ptx_mod_str;
-} PtxInjectMutTypeInfo;
-
-static const PtxInjectMutTypeInfo _ptx_inject_mut_type_infos[] = {
-//  str         ptx_mod_str
-    { "out",    "="},   // PTX_INJECT_MUT_TYPE_OUT
-    { "mod",    "+"},   // PTX_INJECT_MUT_TYPE_OUT
-    { "in",     "" },   // PTX_INJECT_MUT_TYPE_OUT
-};
-
 PTX_INJECT_PUBLIC_DEF
 const char* 
 ptx_inject_result_to_string(
@@ -538,12 +272,98 @@ ptx_inject_result_to_string(
 
 static
 inline
+PtxInjectResult
+_ptx_inject_snprintf_append(
+    char* buffer, 
+    size_t buffer_size, 
+    size_t* total_bytes_ref, 
+    const char* fmt,
+    ...
+) {
+    va_list args;
+    va_start(args, fmt);
+    if (buffer && buffer_size < *total_bytes_ref) {
+        buffer = NULL;
+    }
+    int bytes = 
+		vsnprintf(
+			buffer ? buffer + *total_bytes_ref : NULL, 
+			buffer ? buffer_size - *total_bytes_ref : 0, 
+			fmt, 
+			args
+		);
+    va_end(args);
+    if (bytes < 0) {
+        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INTERNAL );
+    }
+    *total_bytes_ref += (size_t)bytes;
+    return PTX_INJECT_SUCCESS;
+}
+
+static
+inline
+PtxInjectResult
+_ptx_inject_get_name_to_newline_trim_whitespace(
+    const char* input,
+    size_t* start,
+    size_t* length
+) {
+    size_t i = 0;
+
+    if (input[i] != ' ' && input[i] != '\t') {
+        _PTX_INJECT_ERROR(  PTX_INJECT_ERROR_FORMATTING );
+    }
+
+    i++;
+
+    while (input[i] == ' ' || input[i] == '\t') {
+        i++;
+    }
+
+    if (input[i] == '\n' || input[i] == '\0') {
+        _PTX_INJECT_ERROR(  PTX_INJECT_ERROR_FORMATTING );
+    }
+
+    *start = i;
+    size_t len = 0;
+
+    while (true) {
+        while (input[i] != ' ' && input[i] != '\t' && input[i] != '\n' && input[i] != '\0') {
+            i++;
+        }
+
+        len = i - *start;
+
+        if (input[i] == '\n' || input[i] == '\0') {
+            break;
+        }
+
+        while (input[i] == ' ' || input[i] == '\t') {
+            i++;
+        }
+
+        if (input[i] == '\n' || input[i] == '\0') {
+            break;
+        }
+    }
+
+    if (input[i] != '\n') {
+        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
+    }
+
+    *length = len;
+    return PTX_INJECT_SUCCESS;
+}
+
+static
+inline
 bool
 _ptx_inject_is_whitespace(
     char c
 ) {
     return (c == ' ' || c == '\t');
 }
+
 
 static
 inline
@@ -560,29 +380,6 @@ _ptx_inject_str_whitespace(
     }
 
 	return str_ptr;
-}
-
-static
-inline
-bool
-_ptx_inject_is_str_line_commented(
-    const char* buffer_start, 
-    const char* buffer_ptr
-) {
-    if (buffer_ptr <= buffer_start) {
-        return false;
-    }
-    const char* p = buffer_ptr - 1;
-    while (p >= buffer_start) {
-        if (*p == '\n') {
-            return false;
-        }
-        if (*p == '/' && p > buffer_start && *(p - 1) == '/') {
-            return true;
-        }
-        p--;
-    }
-    return false;
 }
 
 static
@@ -656,232 +453,15 @@ _ptx_inject_get_name_trim_whitespace(
 static
 inline
 PtxInjectResult
-_ptx_inject_get_name_to_newline_trim_whitespace(
-    const char* input,
-    size_t* start,
-    size_t* length
-) {
-    size_t i = 0;
-
-    if (input[i] != ' ' && input[i] != '\t') {
-        _PTX_INJECT_ERROR(  PTX_INJECT_ERROR_FORMATTING );
-    }
-
-    i++;
-
-    while (input[i] == ' ' || input[i] == '\t') {
-        i++;
-    }
-
-    if (input[i] == '\n' || input[i] == '\0') {
-        _PTX_INJECT_ERROR(  PTX_INJECT_ERROR_FORMATTING );
-    }
-
-    *start = i;
-    size_t len = 0;
-
-    while (true) {
-        while (input[i] != ' ' && input[i] != '\t' && input[i] != '\n' && input[i] != '\0') {
-            i++;
-        }
-
-        len = i - *start;
-
-        if (input[i] == '\n' || input[i] == '\0') {
-            break;
-        }
-
-        while (input[i] == ' ' || input[i] == '\t') {
-            i++;
-        }
-
-        if (input[i] == '\n' || input[i] == '\0') {
-            break;
-        }
-    }
-
-    if (input[i] != '\n') {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
-    }
-
-    *length = len;
-    return PTX_INJECT_SUCCESS;
-}
-
-static
-inline
-PtxInjectResult
-_ptx_inject_snprintf_append(
-    char* buffer, 
-    size_t buffer_size, 
-    size_t* total_bytes_ref, 
-    const char* fmt,
-    ...
-) {
-    va_list args;
-    va_start(args, fmt);
-    if (buffer && buffer_size < *total_bytes_ref) {
-        buffer = NULL;
-    }
-    int bytes = 
-		vsnprintf(
-			buffer ? buffer + *total_bytes_ref : NULL, 
-			buffer ? buffer_size - *total_bytes_ref : 0, 
-			fmt, 
-			args
-		);
-    va_end(args);
-    if (bytes < 0) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INTERNAL );
-    }
-    *total_bytes_ref += (size_t)bytes;
-    return PTX_INJECT_SUCCESS;
-}
-
-static
-inline
-PtxInjectResult
-_ptx_inject_parse_argument(
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
-    const char* argument_start,
-    PtxInjectMutType* mut_type_ref,
-    size_t* data_type_idx_ref,
-    const char** argument_name_ref,
-    size_t* argument_name_length_ref,
-    const char** argument_end_ref
-) {
-    const char* argument_ptr = argument_start;
-    *mut_type_ref = PTX_INJECT_MUT_TYPE_NUM_ENUMS;
-    for (size_t i = 0; i < PTX_INJECT_MUT_TYPE_NUM_ENUMS; i++) {
-        PtxInjectMutType mut_type = (PtxInjectMutType)i;
-        const char* mut_type_str = _ptx_inject_mut_type_infos[i].str;
-        if (_ptx_inject_strcmp_advance(&argument_ptr, mut_type_str)) {
-            *mut_type_ref = mut_type;
-        }
-    }
-
-    if (*mut_type_ref < 0 || *mut_type_ref >= PTX_INJECT_MUT_TYPE_NUM_ENUMS) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
-    }
-
-    if (*argument_ptr != ' ' && *argument_ptr != '\t') {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
-    }
-    
-    argument_ptr = _ptx_inject_str_whitespace(argument_ptr);
-
-    size_t data_type_max_len_matched = 0;
-    for (size_t i = 0; i < num_data_type_infos; i++) {
-        const char* data_type_str = data_type_infos[i].name;
-        size_t this_len = strlen(data_type_str);
-        if (strncmp(argument_ptr, data_type_str, this_len) == 0) {
-            if (this_len > data_type_max_len_matched) {
-                *data_type_idx_ref = i;
-                data_type_max_len_matched = this_len;
-            }
-        }
-    }
-
-    if (data_type_max_len_matched == 0) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
-    }
-    argument_ptr += data_type_max_len_matched;
-
-    size_t var_name_start;
-    size_t var_name_length;
-    _PTX_INJECT_CHECK_RET(
-        _ptx_inject_get_name_to_newline_trim_whitespace(
-            argument_ptr, 
-            &var_name_start, 
-            &var_name_length
-        )
-    );
-
-    *argument_name_ref = argument_ptr + var_name_start;
-    *argument_name_length_ref = var_name_length;
-
-    argument_ptr += var_name_start + var_name_length;
-    argument_ptr = _ptx_inject_str_whitespace_to_newline(argument_ptr);
-    if(*argument_ptr != '\n') {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
-    }
-    argument_ptr++;
-
-    *argument_end_ref = argument_ptr;
-
-    return PTX_INJECT_SUCCESS;
-}
-
-static
-inline
-PtxInjectResult
-_ptx_inject_cuda_parse_argument(
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
-    const char* argument_start,
-    PtxInjectMutType* mut_type_ref,
-    size_t* data_type_idx_ref,
-    const char** argument_name_ref,
-    size_t* argument_name_length_ref,
-    const char** argument_end_ref,
-    bool* found_argument
-) {
-    const char* argument_ptr = argument_start;
-
-    while(true) {
-        if (_ptx_inject_strcmp_advance(&argument_ptr, _ptx_inject_cuda_header_str_end)) {
-            *argument_end_ref = argument_ptr;
-            *found_argument = false;
-            return PTX_INJECT_SUCCESS;
-        } else if (_ptx_inject_strcmp_advance(&argument_ptr, "//")) {
-            // Ignore line if its a comment.
-            while(*argument_ptr != '\n' && *argument_ptr != '\0') {
-                argument_ptr++;
-            }
-            if (*argument_ptr == '\n') {
-                argument_ptr++;
-            }
-            // Advance to the next non-whitespace.
-            argument_ptr = _ptx_inject_str_whitespace(argument_ptr);
-        } else if (*argument_ptr == '\n') {
-            // Ignore newlines, advance to the next non-whitespace.
-            argument_ptr++;
-            argument_ptr = _ptx_inject_str_whitespace(argument_ptr);
-        }
-        else {
-            *found_argument = true;
-            break;
-        }
-    }
-
-    _PTX_INJECT_CHECK_RET(
-        _ptx_inject_parse_argument(
-            data_type_infos,
-            num_data_type_infos,
-            argument_ptr,
-            mut_type_ref,
-            data_type_idx_ref,
-            argument_name_ref,
-            argument_name_length_ref,
-            argument_end_ref
-        )
-    );
-
-    return PTX_INJECT_SUCCESS;
-}
-
-static
-inline
-PtxInjectResult
 _ptx_inject_ptx_parse_argument(
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
     const char* argument_start,
-    PtxInjectMutType* mut_type_ref,
-    size_t* data_type_idx_ref,
     const char** register_name_ref,
     size_t* register_name_length_ref,
+    PtxInjectMutType* mut_type_ref,
+    const char** register_type_name_ref,
+    size_t* register_type_name_length_ref,
+    const char** data_type_field_name_ref,
+    size_t* data_type_field_name_length_ref,
     const char** argument_name_ref,
     size_t* argument_name_length_ref,
     const char** argument_end_ref,
@@ -912,272 +492,66 @@ _ptx_inject_ptx_parse_argument(
         _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
     }
 
-    _PTX_INJECT_CHECK_RET(
-        _ptx_inject_parse_argument(
-            data_type_infos,
-            num_data_type_infos,
-            argument_ptr,
-            mut_type_ref,
-            data_type_idx_ref,
-            argument_name_ref,
-            argument_name_length_ref,
-            argument_end_ref
-        )
-    );
-
-    return PTX_INJECT_SUCCESS;
-}
-
-PTX_INJECT_PUBLIC_DEF
-PtxInjectResult
-ptx_inject_process_cuda(
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
-    const char* annotated_cuda_src,
-    char* processed_cuda_buffer,
-    size_t processed_cuda_buffer_size,
-    size_t* processed_cuda_bytes_written_out,
-    size_t* num_inject_sites_out
-) {
-    if (annotated_cuda_src == NULL) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INVALID_INPUT );
-    }
-
-    size_t rendered_cuda_bytes_written = 0;
-
-    if (processed_cuda_bytes_written_out != NULL) {
-        *processed_cuda_bytes_written_out = 0;
-    } else {
-        processed_cuda_bytes_written_out = &rendered_cuda_bytes_written;
-    }
-
-    size_t num_inject_sites = 0;
-
-    const char* src_ptr = annotated_cuda_src;
-    while(true) {
-        const char* const start_of_inject = strstr(src_ptr, _ptx_inject_cuda_header_str_start);
-        if (start_of_inject == NULL) break;
-
-        bool is_commented = _ptx_inject_is_str_line_commented(annotated_cuda_src, start_of_inject);
-        if (is_commented) {
-            // A comment exists before "start_of_inject", skip ahead and continue.
-            // But write out the commented line also.
-            _PTX_INJECT_CHECK_RET(
-                _ptx_inject_snprintf_append(
-                    processed_cuda_buffer,
-                    processed_cuda_buffer_size,
-                    processed_cuda_bytes_written_out,
-                    "%.*s",
-                    start_of_inject - src_ptr + strlen(_ptx_inject_cuda_header_str_start),
-                    src_ptr
-                )
-            );
-            src_ptr = start_of_inject + strlen(_ptx_inject_cuda_header_str_start);
-            continue;
-        }
-
-        _PTX_INJECT_CHECK_RET(
-            _ptx_inject_snprintf_append(
-                processed_cuda_buffer,
-                processed_cuda_buffer_size,
-                processed_cuda_bytes_written_out,
-                "%.*s",
-                start_of_inject - src_ptr,
-                src_ptr
-            )
-        );
-
-        src_ptr = start_of_inject + strlen(_ptx_inject_cuda_header_str_start);
-
-        size_t inject_name_start, inject_name_length;
-        _PTX_INJECT_CHECK_RET(
-            _ptx_inject_get_name_to_newline_trim_whitespace(
-                src_ptr, 
-                &inject_name_start, 
-                &inject_name_length
-            )
-        );
-
-        const char* const inject_name = src_ptr + inject_name_start;
-        src_ptr += inject_name_start + inject_name_length;
-        src_ptr = _ptx_inject_str_whitespace_to_newline(src_ptr);
-        if(*src_ptr != '\n') {
+    char mut_type_char = *argument_ptr++;
+    switch(mut_type_char) {
+        case 'm': *mut_type_ref = PTX_INJECT_MUT_TYPE_MOD; break;
+        case 'o': *mut_type_ref = PTX_INJECT_MUT_TYPE_OUT; break;
+        case 'i': *mut_type_ref = PTX_INJECT_MUT_TYPE_IN; break;
+        default:
             _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
-        }
-        src_ptr++;
-
-        const char* tabbing;
-        size_t tabbing_length;
-
-        tabbing = src_ptr;
-        src_ptr = _ptx_inject_str_whitespace(src_ptr);
-        tabbing_length = src_ptr - tabbing;
-
-        _PTX_INJECT_CHECK_RET(
-            _ptx_inject_snprintf_append(
-                processed_cuda_buffer,
-                processed_cuda_buffer_size,
-                processed_cuda_bytes_written_out,
-                "asm(\n%.*s\"%s %.*s\\n\\t\"\n",
-                tabbing_length,
-                tabbing,
-                _ptx_inject_ptx_header_str_start,
-                inject_name_length,
-                inject_name
-            )
-        );
-
-        const char* const argument_tabbing = tabbing;
-        size_t argument_tabbing_length = tabbing_length;
-        
-        const char* arguments_start = src_ptr;
-
-        typedef enum {
-            PASS_ENUM_OUTPUT_OPERANDS,
-            PASS_ENUM_INPUT_OPERANDS,
-            PASS_ENUM_OUTPUT_ASSIGNS,
-            PASS_ENUM_INPUT_ASSIGNS,
-            PASS_ENUM_NUM_ENUMS
-        } PassEnum;
-
-        int num_args = 0;
-        for (int i = 0; i < PASS_ENUM_NUM_ENUMS; i++) {
-            PassEnum pass = (PassEnum)i;
-            src_ptr = arguments_start;
-            bool first_argument_of_type = true;
-        
-            while(true) {  
-                PtxInjectMutType mut_type;
-                size_t data_type_idx;
-                const char* argument_name;
-                size_t argument_name_length;
-                bool found_argument;
-                _PTX_INJECT_CHECK_RET(
-                    _ptx_inject_cuda_parse_argument(
-                        data_type_infos,
-                        num_data_type_infos,
-                        src_ptr,
-                        &mut_type,
-                        &data_type_idx,
-                        &argument_name,
-                        &argument_name_length,
-                        &src_ptr,
-                        &found_argument
-                    )
-                );
-
-                if (!found_argument) {
-                    if (pass == PASS_ENUM_INPUT_OPERANDS) {
-                        _PTX_INJECT_CHECK_RET(
-                            _ptx_inject_snprintf_append(
-                                processed_cuda_buffer,
-                                processed_cuda_buffer_size,
-                                processed_cuda_bytes_written_out,
-                                "%.*s\"%s\"\n",
-                                argument_tabbing_length,
-                                argument_tabbing,
-                                _ptx_inject_ptx_header_str_end
-                            )
-                        );
-                    } else if (pass == PASS_ENUM_INPUT_ASSIGNS) {
-                        _PTX_INJECT_CHECK_RET(
-                            _ptx_inject_snprintf_append(
-                                processed_cuda_buffer,
-                                processed_cuda_buffer_size,
-                                processed_cuda_bytes_written_out,
-                                "%.*s);",
-                                tabbing_length,
-                                tabbing
-                            )
-                        );
-                    }
-                    break;
-                };
-
-                tabbing = src_ptr;
-                src_ptr = _ptx_inject_str_whitespace(src_ptr);
-                tabbing_length = src_ptr - tabbing;
-
-                if (mut_type == PTX_INJECT_MUT_TYPE_IN) {
-                    if (pass == PASS_ENUM_OUTPUT_OPERANDS) continue;
-                    if (pass == PASS_ENUM_OUTPUT_ASSIGNS) continue;
-                } else {
-                    if (pass == PASS_ENUM_INPUT_OPERANDS) continue;
-                    if (pass == PASS_ENUM_INPUT_ASSIGNS) continue;
-                }
-
-                if (pass == PASS_ENUM_INPUT_OPERANDS || pass == PASS_ENUM_OUTPUT_OPERANDS) {
-                    int arg_num = num_args++;
-                    const char* mut_type_str = _ptx_inject_mut_type_infos[mut_type].str;
-                    const char* data_type_str = data_type_infos[data_type_idx].name;
-                    _PTX_INJECT_CHECK_RET(
-                        _ptx_inject_snprintf_append(
-                            processed_cuda_buffer,
-                            processed_cuda_buffer_size,
-                            processed_cuda_bytes_written_out,
-                            "%.*s\"// %%%d %s %s %.*s\\n\\t\"\n",
-                            argument_tabbing_length,
-                            argument_tabbing,
-                            arg_num,
-                            mut_type_str,
-                            data_type_str,
-                            argument_name_length,
-                            argument_name
-                        )
-                    );
-                } else {
-                    const char* ptx_mod_str_out = _ptx_inject_mut_type_infos[mut_type].ptx_mod_str;
-                    char register_char = data_type_infos[data_type_idx].register_char;
-                    const char* reg_cast_str = data_type_infos[data_type_idx].register_cast_str;
-                    _PTX_INJECT_CHECK_RET(
-                        _ptx_inject_snprintf_append(
-                            processed_cuda_buffer,
-                            processed_cuda_buffer_size,
-                            processed_cuda_bytes_written_out,
-                            "%.*s%c \"%s%c\"(%s%.*s)\n",
-                            argument_tabbing_length,
-                            argument_tabbing,
-                            first_argument_of_type ? ':' : ',',
-                            ptx_mod_str_out,
-                            register_char,
-                            reg_cast_str,
-                            argument_name_length,
-                            argument_name
-                        )
-                    );
-                    first_argument_of_type = false;
-                }
-            }
-
-        }
-        num_inject_sites++;
     }
+
+    // if (*argument_ptr++ != ' ') {
+    //     _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
+    // }
+
     _PTX_INJECT_CHECK_RET(
-        _ptx_inject_snprintf_append(
-            processed_cuda_buffer,
-            processed_cuda_buffer_size,
-            processed_cuda_bytes_written_out,
-            "%s",
-            src_ptr
+        _ptx_inject_get_name_trim_whitespace(
+            argument_ptr,
+            register_type_name_ref, 
+            register_type_name_length_ref,
+            &argument_ptr
         )
     );
 
-    if (num_inject_sites_out != NULL) {
-        *num_inject_sites_out = num_inject_sites;
-    }
+    _PTX_INJECT_CHECK_RET(
+        _ptx_inject_get_name_trim_whitespace(
+            argument_ptr,
+            data_type_field_name_ref, 
+            data_type_field_name_length_ref,
+            &argument_ptr
+        )
+    );
 
-    if (processed_cuda_buffer && *processed_cuda_bytes_written_out >= processed_cuda_buffer_size) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INSUFFICIENT_BUFFER );
+    size_t var_name_start;
+    size_t var_name_length;
+    _PTX_INJECT_CHECK_RET(
+        _ptx_inject_get_name_to_newline_trim_whitespace(
+            argument_ptr, 
+            &var_name_start, 
+            &var_name_length
+        )
+    );
+
+    *argument_name_ref = argument_ptr + var_name_start;
+    *argument_name_length_ref = var_name_length;
+
+    argument_ptr += var_name_start + var_name_length;
+    argument_ptr = _ptx_inject_str_whitespace_to_newline(argument_ptr);
+    if(*argument_ptr != '\n') {
+        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
     }
-    
+    argument_ptr++;
+
+    *argument_end_ref = argument_ptr;
+
     return PTX_INJECT_SUCCESS;
 }
 
 static
+inline
 PtxInjectResult
 _ptx_inject_create(
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
     struct PtxInjectHandleImpl* ptx_inject,
     const char* processed_ptx_src
 ) {
@@ -1280,215 +654,158 @@ _ptx_inject_create(
         }
 
         unique_inject_site->num_sites++;
-
-        const char* tabbing;
-        size_t tabbing_length;
-
-        tabbing = src_ptr;
         src_ptr = _ptx_inject_str_whitespace(src_ptr);
-        tabbing_length = src_ptr - tabbing;
 
+        if(ptx_inject->inject_site_to_inject_idx != NULL) {
+            ptx_inject->inject_site_to_inject_idx[num_inject_sites] = unique_inject_site->unique_idx;
+        }
+        if(ptx_inject->inject_sites != NULL) {
+            const char* stub_location = ptx_inject->stub_buffer + stubs_bytes_written;
+            ptx_inject->inject_sites[num_inject_sites] = stub_location;
+        }
         _PTX_INJECT_CHECK_RET(
             _ptx_inject_snprintf_append(
                 ptx_inject->stub_buffer,
                 ptx_inject->stub_buffer_size,
                 &stubs_bytes_written,
-                "{\n",
-                tabbing_length,
-                tabbing
+                "\n"
             )
         );
+        num_inject_sites++;
+        
+        size_t num_args = 0;
+        while(true) {
+            size_t arg_num = num_args++;
+            const char* argument_register_name;
+            size_t argument_register_name_length;
+            PtxInjectMutType argument_mut_type;
+            const char* argument_register_type_name;
+            size_t argument_register_type_name_length;
+            const char* argument_data_type_name;
+            size_t argument_data_type_name_length;
+            const char* argument_name;
+            size_t argument_name_length;
+            bool found_argument;
+            _PTX_INJECT_CHECK_RET(
+                _ptx_inject_ptx_parse_argument(
+                    src_ptr,
+                    &argument_register_name,
+                    &argument_register_name_length,
+                    &argument_mut_type,
+                    &argument_register_type_name,
+                    &argument_register_type_name_length,
+                    &argument_data_type_name,
+                    &argument_data_type_name_length,
+                    &argument_name,
+                    &argument_name_length,
+                    &src_ptr,
+                    &found_argument
+                )
+            );
 
-        const char* arguments_start = src_ptr;
-
-        typedef enum {
-            PASS_UNIQUE_ARGS,
-            PASS_REG_DECL,
-            PASS_MOV_IN_MOD,
-            PASS_MOV_OUT_MOD,
-            PASS_NUM_ENUMS
-        } Pass;
-
-        for (int i = 0; i < PASS_NUM_ENUMS; i++) {
-            Pass pass = (Pass)i;
-            src_ptr = arguments_start;
-            size_t num_args = 0;
-            while(true) {
-                size_t arg_num = num_args++;
-                PtxInjectMutType mut_type;
-                size_t data_type_idx;
-                const char* register_name;
-                size_t register_name_length;
-                const char* argument_name;
-                size_t argument_name_length;
-                bool found_argument;
-                _PTX_INJECT_CHECK_RET(
-                    _ptx_inject_ptx_parse_argument(
-                        data_type_infos,
-                        num_data_type_infos,
-                        src_ptr,
-                        &mut_type,
-                        &data_type_idx,
-                        &register_name,
-                        &register_name_length,
-                        &argument_name,
-                        &argument_name_length,
-                        &src_ptr,
-                        &found_argument
-                    )
-                );
-
-                if (!found_argument) {
-                    if (!is_unique && pass == PASS_UNIQUE_ARGS && unique_inject_site != NULL) {
-                        if (num_args-1 != unique_inject_site->num_args) {
-                            _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
-                        }
+            if (!found_argument) {
+                if (!is_unique && unique_inject_site != NULL) {
+                    if (num_args-1 != unique_inject_site->num_args) {
+                        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
                     }
-                    break;
                 }
-
-                switch(pass) {
-                    case PASS_UNIQUE_ARGS: {
-                        if (!is_unique) {
-                            if (unique_inject_site->args != NULL) {
-                                PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
-                                if (argument_name_length != strlen(args->name)) 
-                                    _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
-                                if (strncmp(argument_name, args->name, argument_name_length) != 0)
-                                    _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
-                                if (mut_type != args->mut_type) 
-                                    _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
-                                if (data_type_idx != args->data_type_idx)
-                                    _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
-                            }
-                            break;
-                        }
-                        num_unique_inject_args++;
-                        unique_inject_site->num_args++;
-                        const char* name = ptx_inject->names_blob + names_blob_bytes_written;
-                        _PTX_INJECT_CHECK_RET(
-                            _ptx_inject_snprintf_append(
-                                ptx_inject->names_blob,
-                                ptx_inject->names_blob_size,
-                                &names_blob_bytes_written,
-                                "%.*s%c",
-                                argument_name_length,
-                                argument_name,
-                                '\0'
-                            )
-                        );
-                        const char* stable_register_name = ptx_inject->names_blob + names_blob_bytes_written;
-                        _PTX_INJECT_CHECK_RET(
-                            _ptx_inject_snprintf_append(
-                                ptx_inject->names_blob,
-                                ptx_inject->names_blob_size,
-                                &names_blob_bytes_written,
-                                "%s%d%c",
-                                PTX_INJECT_STABLE_REGISTER_NAME_PREFIX,
-                                arg_num,
-                                '\0'
-                            )
-                        );
-                        if (unique_inject_site->args != NULL) {
-                            PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
-                            args->mut_type = mut_type;
-                            args->data_type_idx = data_type_idx;
-                            args->name = name;
-                            args->stable_register_name = stable_register_name;
-                        }
-                    } break;
-                    case PASS_REG_DECL: {
-                        const char* data_type_str = data_type_infos[data_type_idx].register_type;
-                        _PTX_INJECT_CHECK_RET(
-                            _ptx_inject_snprintf_append(
-                                ptx_inject->stub_buffer,
-                                ptx_inject->stub_buffer_size,
-                                &stubs_bytes_written,
-                                "%.*s.reg .%s %%%s%d;\n",
-                                tabbing_length,
-                                tabbing,
-                                data_type_str,
-                                PTX_INJECT_STABLE_REGISTER_NAME_PREFIX,
-                                arg_num
-                            )
-                        );
-                    } break;
-                    case PASS_MOV_IN_MOD: {
-                        if (mut_type == PTX_INJECT_MUT_TYPE_IN || mut_type == PTX_INJECT_MUT_TYPE_MOD) {
-                            const char* mov_postfix_str = data_type_infos[data_type_idx].mov_postfix;
-                            _PTX_INJECT_CHECK_RET(
-                                _ptx_inject_snprintf_append(
-                                    ptx_inject->stub_buffer,
-                                    ptx_inject->stub_buffer_size,
-                                    &stubs_bytes_written,
-                                    "%.*smov.%s %%%s%d, %.*s;\n",
-                                    tabbing_length,
-                                    tabbing,
-                                    mov_postfix_str,
-                                    PTX_INJECT_STABLE_REGISTER_NAME_PREFIX,
-                                    arg_num,
-                                    (int)register_name_length,
-                                    register_name
-                                )
-                            );
-                        }
-                    } break;
-                    case PASS_MOV_OUT_MOD: {
-                        if (mut_type == PTX_INJECT_MUT_TYPE_OUT || mut_type == PTX_INJECT_MUT_TYPE_MOD) {
-                            const char* mov_postfix_str = data_type_infos[data_type_idx].mov_postfix;
-                            _PTX_INJECT_CHECK_RET(
-                                _ptx_inject_snprintf_append(
-                                    ptx_inject->stub_buffer,
-                                    ptx_inject->stub_buffer_size,
-                                    &stubs_bytes_written,
-                                    "%.*smov.%s %.*s, %%%s%d;\n",
-                                    tabbing_length,
-                                    tabbing,
-                                    mov_postfix_str,
-                                    (int)register_name_length,
-                                    register_name,
-                                    PTX_INJECT_STABLE_REGISTER_NAME_PREFIX,
-                                    arg_num
-                                )
-                            );
-                        }
-                    } break;
-                    case PASS_NUM_ENUMS: break;
+                if(*src_ptr != '\n') {
+                    _PTX_INJECT_ERROR( PTX_INJECT_ERROR_FORMATTING );
                 }
-                
-                src_ptr = _ptx_inject_str_whitespace(src_ptr);
+                src_ptr++;
+                break;
             }
 
-            if (pass == PASS_MOV_IN_MOD) {
-                if(ptx_inject->inject_site_to_inject_idx != NULL) {
-                    ptx_inject->inject_site_to_inject_idx[num_inject_sites] = unique_inject_site->unique_idx;
+            if (!is_unique) {
+                if (unique_inject_site->args != NULL) {
+                    PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
+
+                    if (argument_name_length != strlen(args->name)) 
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+                    if (strncmp(argument_name, args->name, argument_name_length) != 0)
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+
+                    if (argument_register_name_length != strlen(args->register_name))
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+                    if (strncmp(argument_register_name, args->register_name, argument_register_name_length))
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+
+                    if (argument_mut_type != args->mut_type) 
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+
+                    if (argument_register_type_name_length != strlen(args->register_type_name))
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+                    if (strncmp(argument_register_type_name, args->register_type_name, argument_register_type_name_length))
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+
+                    if (argument_data_type_name_length != strlen(args->data_type_name))
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+                    if (strncmp(argument_data_type_name, args->data_type_name, argument_data_type_name_length))
+                        _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
                 }
-                if(ptx_inject->inject_sites != NULL) {
-                    const char* stub_location = ptx_inject->stub_buffer + stubs_bytes_written;
-                    ptx_inject->inject_sites[num_inject_sites] = stub_location;
-                }
+            } else {
+                num_unique_inject_args++;
+                unique_inject_site->num_args++;
+                const char* name = ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
-                        ptx_inject->stub_buffer,
-                        ptx_inject->stub_buffer_size,
-                        &stubs_bytes_written,
-                        "\n"
+                        ptx_inject->names_blob,
+                        ptx_inject->names_blob_size,
+                        &names_blob_bytes_written,
+                        "%.*s%c",
+                        argument_name_length,
+                        argument_name,
+                        '\0'
                     )
                 );
-                num_inject_sites++;
+                const char* register_name = ptx_inject->names_blob + names_blob_bytes_written;
+                _PTX_INJECT_CHECK_RET(
+                    _ptx_inject_snprintf_append(
+                        ptx_inject->names_blob,
+                        ptx_inject->names_blob_size,
+                        &names_blob_bytes_written,
+                        "%.*s%c",
+                        argument_register_name_length,
+                        argument_register_name,
+                        '\0'
+                    )
+                );
+                const char* register_type_name = ptx_inject->names_blob + names_blob_bytes_written;
+                _PTX_INJECT_CHECK_RET(
+                    _ptx_inject_snprintf_append(
+                        ptx_inject->names_blob,
+                        ptx_inject->names_blob_size,
+                        &names_blob_bytes_written,
+                        "%.*s%c",
+                        argument_register_type_name_length,
+                        argument_register_type_name,
+                        '\0'
+                    )
+                );
+                const char* data_type_name = ptx_inject->names_blob + names_blob_bytes_written;
+                _PTX_INJECT_CHECK_RET(
+                    _ptx_inject_snprintf_append(
+                        ptx_inject->names_blob,
+                        ptx_inject->names_blob_size,
+                        &names_blob_bytes_written,
+                        "%.*s%c",
+                        argument_data_type_name_length,
+                        argument_data_type_name,
+                        '\0'
+                    )
+                );
+                if (unique_inject_site->args != NULL) {
+                    PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
+                    args->mut_type = argument_mut_type;
+                    args->data_type_name = data_type_name;
+                    args->register_type_name = register_type_name;
+                    args->name = name;
+                    args->register_name = register_name;
+                }
             }
+            
+            src_ptr = _ptx_inject_str_whitespace(src_ptr);
         }
-
-        _PTX_INJECT_CHECK_RET(
-            _ptx_inject_snprintf_append(
-                ptx_inject->stub_buffer,
-                ptx_inject->stub_buffer_size,
-                &stubs_bytes_written,
-                "%.*s}",
-                tabbing_length,
-                tabbing
-            )
-        );
     }
     _PTX_INJECT_CHECK_RET(
         _ptx_inject_snprintf_append(
@@ -1517,8 +834,6 @@ PTX_INJECT_PUBLIC_DEF
 PtxInjectResult
 ptx_inject_create(
     PtxInjectHandle* handle,
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
     const char* processed_ptx_src
 ) {
     if (handle == NULL || processed_ptx_src == NULL) {
@@ -1536,15 +851,8 @@ ptx_inject_create(
 
     ptx_inject.injects = (PtxInjectInjection*)memory_block_injects;
 
-    // This call populates a bunch of size data for the handle to be used to allocate the
-    // rest of the handle.
-    result = 
-        _ptx_inject_create(
-            data_type_infos,
-            num_data_type_infos,
-            &ptx_inject, 
-            processed_ptx_src
-        );
+    // This call populates a bunch of size data for the handle to be used to allocate the rest of the handle.
+    result = _ptx_inject_create(&ptx_inject, processed_ptx_src);
     free(ptx_inject.injects);
     ptx_inject.injects = NULL;
     if (result != PTX_INJECT_SUCCESS) {
@@ -1592,13 +900,7 @@ ptx_inject_create(
     (*handle)->names_blob = (char*)((char*)memory_block + names_blob_offset);
     (*handle)->names_blob_size = ptx_inject.names_blob_size;
 
-    result = 
-        _ptx_inject_create(
-            data_type_infos,
-            num_data_type_infos,
-            *handle, 
-            processed_ptx_src
-        );
+    result = _ptx_inject_create(*handle, processed_ptx_src);
     if (result != PTX_INJECT_SUCCESS) {
         ptx_inject_destroy(*handle);
         return result;
@@ -1612,12 +914,6 @@ PtxInjectResult
 ptx_inject_destroy(
     PtxInjectHandle handle
 ) {
-    if (handle == NULL) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INVALID_INPUT );
-    }
-
-    free(handle);
-
     return PTX_INJECT_SUCCESS;
 }
 
@@ -1685,7 +981,7 @@ ptx_inject_inject_info_by_index(
     }
 
     if (inject_idx >= handle->num_injects) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INVALID_INPUT );
+        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_OUT_OF_BOUNDS_IDX );
     }
 
     PtxInjectInjection* inject = &handle->injects[inject_idx];
@@ -1709,9 +1005,10 @@ ptx_inject_variable_info_by_name(
     size_t inject_idx,
     const char* inject_variable_name,
     size_t* inject_variable_arg_idx_out,
+    const char** inject_variable_register_name_out,
     PtxInjectMutType* inject_variable_mut_type_out,
-    size_t* inject_variable_data_type_idx_out,
-    const char** inject_variable_stable_register_name_out
+    const char** inject_variable_register_type_name_out,
+    const char** inject_variable_data_type_name_out
 ) {
     if (handle == NULL) {
         _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INVALID_INPUT );
@@ -1733,14 +1030,17 @@ ptx_inject_variable_info_by_name(
             if (inject_variable_arg_idx_out != NULL) {
                 *inject_variable_arg_idx_out = i;
             }
+            if (inject_variable_register_name_out != NULL) {
+                *inject_variable_register_name_out = arg->register_name;
+            }
             if (inject_variable_mut_type_out != NULL) {
                 *inject_variable_mut_type_out = arg->mut_type;
             }
-            if (inject_variable_data_type_idx_out != NULL) {
-                *inject_variable_data_type_idx_out = arg->data_type_idx;
+            if (inject_variable_register_type_name_out != NULL) {
+                *inject_variable_register_type_name_out = arg->register_type_name;
             }
-            if (inject_variable_stable_register_name_out != NULL) {
-                *inject_variable_stable_register_name_out = arg->stable_register_name;
+            if (inject_variable_data_type_name_out != NULL) {
+                *inject_variable_data_type_name_out = arg->data_type_name;
             }
             return PTX_INJECT_SUCCESS;
         }
@@ -1756,16 +1056,17 @@ ptx_inject_variable_info_by_index(
     size_t inject_idx,
     size_t inject_variable_arg_idx,
     const char** inject_variable_name_out,
+    const char** inject_variable_register_name_out,
     PtxInjectMutType* inject_variable_mut_type_out,
-    size_t* inject_variable_data_type_idx_out,
-    const char** inject_variable_stable_register_name_out
+    const char** inject_variable_register_type_name_out,
+    const char** inject_variable_data_type_name_out
 ) {
     if (handle == NULL) {
         _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INVALID_INPUT );
     }
 
     if (inject_idx >= handle->num_injects) {
-        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INVALID_INPUT );
+        _PTX_INJECT_ERROR( PTX_INJECT_ERROR_OUT_OF_BOUNDS_IDX );
     }
 
     PtxInjectInjection* inject = &handle->injects[inject_idx];
@@ -1779,14 +1080,17 @@ ptx_inject_variable_info_by_index(
     if(inject_variable_name_out != NULL) {
         *inject_variable_name_out = arg->name;
     }
+    if(inject_variable_register_name_out != NULL) {
+        *inject_variable_register_name_out = arg->register_name;
+    }
     if (inject_variable_mut_type_out != NULL) {
         *inject_variable_mut_type_out = arg->mut_type;
     }
-    if (inject_variable_data_type_idx_out != NULL) {
-        *inject_variable_data_type_idx_out = arg->data_type_idx;
+    if(inject_variable_register_type_name_out != NULL) {
+        *inject_variable_register_type_name_out = arg->register_type_name;
     }
-    if (inject_variable_stable_register_name_out != NULL) {
-        *inject_variable_stable_register_name_out = arg->stable_register_name;
+    if(inject_variable_data_type_name_out != NULL) {
+        *inject_variable_data_type_name_out = arg->data_type_name;
     }
 
     return PTX_INJECT_SUCCESS;
@@ -1801,7 +1105,7 @@ ptx_inject_render_ptx(
     char* rendered_ptx_buffer,
     size_t rendered_ptx_buffer_size,
     size_t* rendered_ptx_bytes_written_out
- ) {
+) {
     if (handle == NULL) {
         _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INVALID_INPUT );
     }
@@ -1888,3 +1192,262 @@ ptx_inject_render_ptx(
 
 #endif // PTX_INJECT_IMPLEMENTATION_ONCE
 #endif // PTX_INJECT_IMPLEMENTATION
+
+#if defined(__CUDACC__)
+
+#define PTX_TYPES_CAT2(a,b) a##b
+#define PTX_TYPES_CAT(a,b)  PTX_TYPES_CAT2(a,b)
+
+#define PTX_TYPES_STR2(x) #x
+#define PTX_TYPES_STR(x)  PTX_TYPES_STR2(x)
+
+// Descriptor tuple: (reg_suffix, mov_postfix, constraint, bind_kind)
+#define PTX_TYPES_DESC(reg_suffix, mov_postfix, constraint, bind_kind) \
+  (reg_suffix, mov_postfix, constraint, bind_kind)
+
+// Expand-then-paste: PTX_TYPE_INFO(<expanded tok>)
+#define PTX_TYPES_INFO(tok)   PTX_TYPES_INFO_I(tok)
+#define PTX_TYPES_INFO_I(tok) PTX_TYPES_CAT(PTX_TYPE_INFO_, tok)
+
+// Tuple extractors
+#define PTX_TYPES_T0(t) PTX_TYPES_T0_I t
+#define PTX_TYPES_T1(t) PTX_TYPES_T1_I t
+#define PTX_TYPES_T2(t) PTX_TYPES_T2_I t
+#define PTX_TYPES_T3(t) PTX_TYPES_T3_I t
+#define PTX_TYPES_T0_I(a,b,c,d) a
+#define PTX_TYPES_T1_I(a,b,c,d) b
+#define PTX_TYPES_T2_I(a,b,c,d) c
+#define PTX_TYPES_T3_I(a,b,c,d) d
+
+// Bind implementations
+#define PTX_TYPES_BIND_ID(x)  (x)
+#define PTX_TYPES_BIND_U16(x) (*reinterpret_cast<unsigned short*>(& (x) ))
+#define PTX_TYPES_BIND_U32(x) (*reinterpret_cast<unsigned int  *>(& (x) ))
+
+// Bind kind dispatch (expand-then-paste)
+#define PTX_TYPES_BIND_KIND(k)   PTX_TYPES_BIND_KIND_I(k)
+#define PTX_TYPES_BIND_KIND_I(k) PTX_TYPES_CAT(PTX_TYPES_BIND_, k)
+
+// ---- include types registry (configurable) ----
+#ifndef PTX_INJECT_NO_DEFAULT_TYPES
+    #define PTX_TYPE_INFO_F16         PTX_TYPES_DESC(b16, b16, h, U16)
+    #define PTX_TYPE_INFO_F16X2       PTX_TYPES_DESC(b32, b32, r, U32)
+    #define PTX_TYPE_INFO_S32         PTX_TYPES_DESC(s32, s32, r, ID)
+    #define PTX_TYPE_INFO_U32         PTX_TYPES_DESC(u32, u32, r, ID)
+    #define PTX_TYPE_INFO_F32         PTX_TYPES_DESC(f32, f32, f, ID)
+    #define PTX_TYPE_INFO_B32         PTX_TYPES_DESC(b32, b32, r, ID)
+#endif
+
+// ---------- API consumed by the rest of this header ----------
+#define PTX_REGTYPE_STR(tok)    PTX_TYPES_STR(PTX_TYPES_T0(PTX_TYPES_INFO(tok)))
+#define PTX_MOV_STR(tok)        PTX_TYPES_STR(PTX_TYPES_T1(PTX_TYPES_INFO(tok)))
+#define PTX_CONSTRAINT_STR(tok) PTX_TYPES_STR(PTX_TYPES_T2(PTX_TYPES_INFO(tok)))
+#define PTX_BIND(tok, x)        PTX_TYPES_BIND_KIND(PTX_TYPES_T3(PTX_TYPES_INFO(tok)))(x)
+
+#include <boost/preprocessor.hpp>
+
+// ============================================================================
+// Helpers
+// ============================================================================
+#define PTX_CAT_(a,b) a##b
+#define PTX_CAT(a,b)  PTX_CAT_(a,b)
+
+#define PTX_STR_I(x) BOOST_PP_STRINGIZE(x)
+#define PTX_STR(x)   PTX_STR_I(x)
+
+// Stable PTX temp register name for operand index N.
+// NOTE: inside inline-asm text, "%%" becomes a literal '%' in final PTX.
+#define PTX_TMP_REG_STR(idx) "%%_x" PTX_STR(idx)
+#define PTX_TMP_REG_NAME_STR(idx) "_x" PTX_STR(idx)
+
+// Operand placeholder "%N" (single '%' is correct here — it's an asm placeholder)
+#define PTX_OP_STR(idx) "%" PTX_STR(idx)
+
+// ============================================================================
+// Operand tuple
+// ============================================================================
+// Tuple layout: (kind, type_token, name_token, expr)
+#define PTX_KIND(e) BOOST_PP_TUPLE_ELEM(4, 0, e)
+#define PTX_TYPE(e) BOOST_PP_TUPLE_ELEM(4, 1, e)
+#define PTX_NAME(e) BOOST_PP_TUPLE_ELEM(4, 2, e)
+#define PTX_EXPR(e) BOOST_PP_TUPLE_ELEM(4, 3, e)
+
+// Arity-dispatch: allow (type, name) shorthand => expr=name
+#define PTX_IN(...)  PTX_CAT(PTX_IN_,  BOOST_PP_VARIADIC_SIZE(__VA_ARGS__))(__VA_ARGS__)
+#define PTX_MOD(...) PTX_CAT(PTX_MOD_, BOOST_PP_VARIADIC_SIZE(__VA_ARGS__))(__VA_ARGS__)
+#define PTX_OUT(...) PTX_CAT(PTX_OUT_, BOOST_PP_VARIADIC_SIZE(__VA_ARGS__))(__VA_ARGS__)
+
+#define PTX_IN_2(type_tok, name_tok)            (in,  type_tok, name_tok, name_tok)
+#define PTX_IN_3(type_tok, name_tok, expr)      (in,  type_tok, name_tok, expr)
+
+#define PTX_MOD_2(type_tok, name_tok)           (mod, type_tok, name_tok, name_tok)
+#define PTX_MOD_3(type_tok, name_tok, expr)     (mod, type_tok, name_tok, expr)
+
+#define PTX_OUT_2(type_tok, name_tok)           (out, type_tok, name_tok, name_tok)
+#define PTX_OUT_3(type_tok, name_tok, expr)     (out, type_tok, name_tok, expr)
+
+// ============================================================================
+// Kind classification
+// ============================================================================
+#define PTX_IS_MOD_in  0
+#define PTX_IS_MOD_mod 1
+#define PTX_IS_MOD_out 0
+
+#define PTX_IS_OUT_in  0
+#define PTX_IS_OUT_mod 0
+#define PTX_IS_OUT_out 1
+
+#define PTX_IS_IN_in   1
+#define PTX_IS_IN_mod  0
+#define PTX_IS_IN_out  0
+
+#define PTX_PRED_MOD(s, data, e) PTX_CAT(PTX_IS_MOD_, PTX_KIND(e))
+#define PTX_PRED_OUT(s, data, e) PTX_CAT(PTX_IS_OUT_, PTX_KIND(e))
+#define PTX_PRED_IN(s,  data, e) PTX_CAT(PTX_IS_IN_,  PTX_KIND(e))
+
+// Marker mode chars
+#define PTX_KINDCHAR_in  "i"
+#define PTX_KINDCHAR_mod "m"
+#define PTX_KINDCHAR_out "o"
+#define PTX_KINDCHAR(kind) PTX_CAT(PTX_KINDCHAR_, kind)
+
+// ============================================================================
+// Sequences and counts
+// ============================================================================
+#define PTX_ARGS_SEQ(...) BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__)
+
+#define PTX_MOD_SEQ(seq) BOOST_PP_SEQ_FILTER(PTX_PRED_MOD, _, seq)
+#define PTX_OUT_SEQ(seq) BOOST_PP_SEQ_FILTER(PTX_PRED_OUT, _, seq)
+#define PTX_IN_SEQ(seq)  BOOST_PP_SEQ_FILTER(PTX_PRED_IN,  _, seq)
+
+#define PTX_NMOD(seq) BOOST_PP_SEQ_SIZE(PTX_MOD_SEQ(seq))
+#define PTX_NOUT(seq) BOOST_PP_SEQ_SIZE(PTX_OUT_SEQ(seq))
+#define PTX_NIN(seq)  BOOST_PP_SEQ_SIZE(PTX_IN_SEQ(seq))
+
+// Operand numbering (asm placeholders) is: [mods][outs][ins]
+#define PTX_OFF_OUT(seq) PTX_NMOD(seq)
+#define PTX_OFF_IN(seq)  BOOST_PP_ADD(PTX_NMOD(seq), PTX_NOUT(seq))
+
+#define PTX_HAS_OUTS(seq) BOOST_PP_BOOL(BOOST_PP_ADD(PTX_NMOD(seq), PTX_NOUT(seq)))
+#define PTX_HAS_INS(seq)  BOOST_PP_BOOL(PTX_NIN(seq))
+
+// ============================================================================
+// Emit PTX text pieces
+// ============================================================================
+#define PTX_EMIT_DECL_AT(idx, e) \
+  "  .reg ." PTX_REGTYPE_STR(PTX_TYPE(e)) " " PTX_TMP_REG_STR(idx) ";\n\t"
+
+#define PTX_EMIT_LOAD_AT(idx, e) \
+  "  mov." PTX_MOV_STR(PTX_TYPE(e)) " " PTX_TMP_REG_STR(idx) ", " PTX_OP_STR(idx) ";\n\t"
+
+#define PTX_EMIT_STORE_AT(idx, e) \
+  "  mov." PTX_MOV_STR(PTX_TYPE(e)) " " PTX_OP_STR(idx) ", " PTX_TMP_REG_STR(idx) ";\n\t"
+
+// Marker line: explicit stable reg name + metadata
+// (idx must be the stable operand index: [mods][outs][ins])
+#define PTX_EMIT_MARK_AT(idx, e) \
+  "  // " PTX_TMP_REG_NAME_STR(idx) " " PTX_KINDCHAR(PTX_KIND(e)) " " \
+  PTX_REGTYPE_STR(PTX_TYPE(e)) " " PTX_STR(PTX_TYPE(e)) " " PTX_STR(PTX_NAME(e)) "\n\t"
+
+// ============================================================================
+// Per-kind loops with correct indices
+// ============================================================================
+// Decls
+#define PTX_DECL_MOD_I(r, data, i, e) PTX_EMIT_DECL_AT(i, e)
+#define PTX_DECL_OUT_I(r, off,  i, e) PTX_EMIT_DECL_AT(BOOST_PP_ADD(i, off), e)
+#define PTX_DECL_IN_I(r, off,   i, e) PTX_EMIT_DECL_AT(BOOST_PP_ADD(i, off), e)
+
+// Loads: MOD + IN only
+#define PTX_LOAD_MOD_I(r, data, i, e) PTX_EMIT_LOAD_AT(i, e)
+#define PTX_LOAD_IN_I(r, off,   i, e) PTX_EMIT_LOAD_AT(BOOST_PP_ADD(i, off), e)
+
+// Stores: MOD + OUT only
+#define PTX_STORE_MOD_I(r, data, i, e) PTX_EMIT_STORE_AT(i, e)
+#define PTX_STORE_OUT_I(r, off,  i, e) PTX_EMIT_STORE_AT(BOOST_PP_ADD(i, off), e)
+
+// Marks (canonical order: MOD, OUT, IN) with correct stable-reg indices
+#define PTX_MARK_MOD_I(r, data, i, e) PTX_EMIT_MARK_AT(i, e)
+#define PTX_MARK_OUT_I(r, off,  i, e) PTX_EMIT_MARK_AT(BOOST_PP_ADD(i, off), e)
+#define PTX_MARK_IN_I(r, off,   i, e) PTX_EMIT_MARK_AT(BOOST_PP_ADD(i, off), e)
+
+// ============================================================================
+// C++ asm operand emitters
+// ============================================================================
+// Output/mod operands (go in output clause)
+#define PTX_OUT_OPERAND_mod(e) "+" PTX_CONSTRAINT_STR(PTX_TYPE(e)) ( PTX_BIND(PTX_TYPE(e), PTX_EXPR(e)) )
+#define PTX_OUT_OPERAND_out(e) "=" PTX_CONSTRAINT_STR(PTX_TYPE(e)) ( PTX_BIND(PTX_TYPE(e), PTX_EXPR(e)) )
+#define PTX_OUT_OPERAND(e)     PTX_CAT(PTX_OUT_OPERAND_, PTX_KIND(e))(e)
+
+// Input operands (go in input clause)
+#define PTX_IN_OPERAND_in(e)   PTX_CONSTRAINT_STR(PTX_TYPE(e)) ( PTX_BIND(PTX_TYPE(e), PTX_EXPR(e)) )
+#define PTX_IN_OPERAND(e)      PTX_CAT(PTX_IN_OPERAND_, PTX_KIND(e))(e)
+
+// Comma-safe enumeration
+#define PTX_ENUM_OUT_MOD_I(r, data, i, e) \
+  BOOST_PP_COMMA_IF(i) PTX_OUT_OPERAND(e)
+
+#define PTX_ENUM_OUT_OUT_I(r, nmods, i, e) \
+  BOOST_PP_COMMA_IF(BOOST_PP_ADD(i, nmods)) PTX_OUT_OPERAND(e)
+
+#define PTX_ENUM_IN_I(r, data, i, e) \
+  BOOST_PP_COMMA_IF(i) PTX_IN_OPERAND(e)
+
+// Output list = [mods][outs]
+#define PTX_OUT_OPERANDS(seq) \
+  BOOST_PP_SEQ_FOR_EACH_I(PTX_ENUM_OUT_MOD_I, _, PTX_MOD_SEQ(seq)) \
+  BOOST_PP_SEQ_FOR_EACH_I(PTX_ENUM_OUT_OUT_I, PTX_NMOD(seq), PTX_OUT_SEQ(seq))
+
+// Input list = [ins]
+#define PTX_IN_OPERANDS(seq) \
+  BOOST_PP_SEQ_FOR_EACH_I(PTX_ENUM_IN_I, _, PTX_IN_SEQ(seq))
+
+// asm operand clause selection (no BOOST_PP_IF around comma-heavy lists)
+#define PTX_ASM_OPERANDS_00(seq) \
+  static_assert(false, "PTX_INJECT requires at least one operand.");
+
+#define PTX_ASM_OPERANDS_10(seq)  : PTX_OUT_OPERANDS(seq)
+#define PTX_ASM_OPERANDS_01(seq)  : : PTX_IN_OPERANDS(seq)
+#define PTX_ASM_OPERANDS_11(seq)  : PTX_OUT_OPERANDS(seq) : PTX_IN_OPERANDS(seq)
+
+#define PTX_ASM_OPERANDS_SELECT(ho, hi, seq) PTX_CAT(PTX_ASM_OPERANDS_, PTX_CAT(ho, hi))(seq)
+#define PTX_ASM_OPERANDS(seq) PTX_ASM_OPERANDS_SELECT(PTX_HAS_OUTS(seq), PTX_HAS_INS(seq), seq)
+
+// ============================================================================
+// PTX_INJECT entrypoints
+// ============================================================================
+// site_str must be a string literal, e.g. "func"
+#define PTX_INJECT(site_str, ...) \
+  PTX_INJECT_IMPL(site_str, PTX_ARGS_SEQ(__VA_ARGS__))
+
+// optional: site as identifier token, e.g. PTX_INJECT_TOK(func, ...)
+#define PTX_INJECT_TOK(site_tok, ...) \
+  PTX_INJECT_IMPL(PTX_STR(site_tok), PTX_ARGS_SEQ(__VA_ARGS__))
+
+#define PTX_INJECT_IMPL(site_str, seq) do { \
+  asm ( \
+    "{\n\t" \
+    /* Declare stable regs for all operands (indices match asm operand numbering) */ \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_DECL_MOD_I, _,                PTX_MOD_SEQ(seq)) \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_DECL_OUT_I, PTX_OFF_OUT(seq), PTX_OUT_SEQ(seq)) \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_DECL_IN_I,  PTX_OFF_IN(seq),  PTX_IN_SEQ(seq)) \
+    \
+    /* Marshal C operands -> stable regs (mods + ins) */ \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_LOAD_MOD_I, _,                PTX_MOD_SEQ(seq)) \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_LOAD_IN_I,  PTX_OFF_IN(seq),  PTX_IN_SEQ(seq)) \
+    \
+    "  // PTX_INJECT_START " site_str "\n\t" \
+    /* Marker lines (canonical order: MOD, OUT, IN) */ \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_MARK_MOD_I, _,                PTX_MOD_SEQ(seq)) \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_MARK_OUT_I, PTX_OFF_OUT(seq), PTX_OUT_SEQ(seq)) \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_MARK_IN_I,  PTX_OFF_IN(seq),  PTX_IN_SEQ(seq)) \
+    "  // PTX_INJECT_END\n\t" \
+    \
+    /* Marshal stable regs -> C outputs (mods + outs) */ \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_STORE_MOD_I, _,                PTX_MOD_SEQ(seq)) \
+    BOOST_PP_SEQ_FOR_EACH_I(PTX_STORE_OUT_I, PTX_OFF_OUT(seq), PTX_OUT_SEQ(seq)) \
+    "}" \
+    PTX_ASM_OPERANDS(seq) \
+  ); \
+} while(0)
+
+#endif // __CUDACC__

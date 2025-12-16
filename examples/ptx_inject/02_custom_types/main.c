@@ -7,13 +7,12 @@
 #define PTX_INJECT_IMPLEMENTATION
 #include <ptx_inject.h>
 
+#include <check_result_helper.h>
 #include <ptx_inject_helper.h>
-
 #include <cuda.h>
 #include <cuda_helper.h>
 #include <nvptx_helper.h>
 
-#include <check_result_helper.h>
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
 #define INCBIN_PREFIX g_
@@ -35,6 +34,10 @@ main() {
          g_annotated_ptx_size, g_annotated_ptx_data
     );
 
+    // The cmake plumbing already used the ptxinject cli tool compiled inside the 
+    // project to process kernel.cu. The cuda was then compiled by nvcc as part of
+    // the cmake process as well. INCBIN added the ptx to this file as g_annotated_ptx_data.
+
     PtxInjectHandle ptx_inject;
     ptxInjectCheck( ptx_inject_create(&ptx_inject, g_annotated_ptx_data) );
 
@@ -46,14 +49,14 @@ main() {
     const char* register_name_x;
     const char* register_name_y;
     const char* register_name_z;
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_x", NULL, &register_name_x, NULL, NULL, NULL) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_y", NULL, &register_name_y, NULL, NULL, NULL) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_z", NULL, &register_name_z, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "x", NULL, &register_name_x, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "y", NULL, &register_name_y, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "z", NULL, &register_name_z, NULL, NULL, NULL) );
 
      // We will inject a simple add instruction that just does z = y + x;
     char *stub_buffer = (char *)malloc(STUB_BUFFER_SIZE);
     snprintf(stub_buffer, STUB_BUFFER_SIZE, 
-        "add.ftz.f32 %%%3$s, %%%2$s, %%%1$s;\n",
+        "\tadd.ftz.f32 %%%3$s, %%%2$s, %%%1$s;",
         register_name_x,
         register_name_y,
         register_name_z
@@ -66,9 +69,11 @@ main() {
     const char* ptx_stubs[1];
     ptx_stubs[inject_func_idx] = stub_buffer;
 
+    // We'll use the local helper this time
     size_t num_bytes_written;
     char* rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 1, &num_bytes_written);
 
+#if 0
     // We should now see the add instruction inside the ptx.
     printf(
         "Rendered ptx:\n"
@@ -77,6 +82,7 @@ main() {
         "---------------------------------------------\n\n",
         rendered_ptx
     );
+#endif
 
     // We can now destroy the PtxInjectHandle
     ptxInjectCheck( ptx_inject_destroy(ptx_inject) );

@@ -1,9 +1,10 @@
-project(stack_ptx_inject_serialize_01_buffer_compile)
+project(ptx_inject_02_custom_types)
 
 set(KERNEL_TARGET "${PROJECT_NAME}_kernel_ptx")
 
 add_library(${KERNEL_TARGET} OBJECT kernel.cu)
 target_link_libraries(${KERNEL_TARGET} PRIVATE mm_ptx_headers)
+target_include_directories(${KERNEL_TARGET} PRIVATE ${MM_PTX_CUTLASS_INCLUDE_DIR})
 set_target_properties(${KERNEL_TARGET} PROPERTIES
     CUDA_PTX_COMPILATION ON
     CUDA_ARCHITECTURES native
@@ -22,5 +23,4 @@ target_link_libraries(
     CUDA::nvptxcompiler_static
     m
     mm_ptx_headers
-    stack_ptx_example_generated
 )

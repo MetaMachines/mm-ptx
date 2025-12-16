@@ -14,10 +14,10 @@
 #include <stack_ptx_default_info.h>
 
 #include <check_result_helper.h>
+#include <cuda.h>
 #include <ptx_inject_helper.h>
 #include <nvptx_helper.h>
 #include <cuda_helper.h>
-#include <cuda.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
@@ -93,6 +93,8 @@ run_stack_ptx_instructions(
         )
     );
 
+    printf("buffer:\n%s\n", stub_buffer);
+
     // If there are more than one injects in the ptx, then we need to know which order to send the
     // stubs to 'ptx_inject_render_ptx. In this case because there is only one, 'func' will
     // always be at index 0.
@@ -165,29 +167,33 @@ main() {
          g_annotated_ptx_size, g_annotated_ptx_data
     );
 
+    // The cmake plumbing already used the ptxinject cli tool compiled inside the 
+    // project to process kernel.cu. The cuda was then compiled by nvcc as part of
+    // the cmake process as well. INCBIN added the ptx to this file as g_annotated_ptx_data.
+
     PtxInjectHandle ptx_inject;
     ptxInjectCheck( ptx_inject_create(&ptx_inject, g_annotated_ptx_data) );
 
     enum Register {
-        REGISTER_X,
-        REGISTER_Y,
+        REGISTER_X_Y,
         REGISTER_Z,
+        REGISTER_W,
         REGISTER_NUM_ENUMS
     };
 
     StackPtxRegister registers[] = {
-        [REGISTER_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
-        [REGISTER_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
-        [REGISTER_Z] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
+        [REGISTER_X_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F16X2},
+        [REGISTER_Z] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F16},
+        [REGISTER_W] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
     };
     static const size_t num_registers = REGISTER_NUM_ENUMS;
 
     size_t inject_func_idx;
     ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "func", &inject_func_idx, NULL, NULL) );
 
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_x", NULL, &registers[REGISTER_X].name, NULL, NULL, NULL) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_y", NULL, &registers[REGISTER_Y].name, NULL, NULL, NULL) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_z", NULL, &registers[REGISTER_Z].name, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "x_y", NULL, &registers[REGISTER_X_Y].name, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "z", NULL, &registers[REGISTER_Z].name, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "w", NULL, &registers[REGISTER_W].name, NULL, NULL, NULL) );
 
     size_t stack_ptx_workspace_size;
     stackPtxCheck(
@@ -202,32 +208,22 @@ main() {
     void* stack_ptx_workspace = malloc(stack_ptx_workspace_size);
 
     static const size_t requests[] = {
-        REGISTER_Z
+        REGISTER_W
     };
     static const size_t num_requests = STACK_PTX_ARRAY_NUM_ELEMS(requests);
 
     static const StackPtxInstruction add_inputs[] = {
-        stack_ptx_encode_input(REGISTER_X),
-        stack_ptx_encode_input(REGISTER_Y),
+        stack_ptx_encode_input(REGISTER_Z),
+        stack_ptx_encode_input(REGISTER_X_Y),
+        stack_ptx_encode_ptx_instruction_f16x2_to_v2_f16,
+        stack_ptx_encode_meta_swap(STACK_PTX_STACK_TYPE_F16),
+        stack_ptx_encode_ptx_instruction_f16_to_f32,
+        stack_ptx_encode_ptx_instruction_f16_to_f32,
+        stack_ptx_encode_ptx_instruction_f16_to_f32,
         stack_ptx_encode_ptx_instruction_add_ftz_f32,
-        stack_ptx_encode_return
-    };
-
-    static const StackPtxInstruction mul_inputs[] = {
-        stack_ptx_encode_input(REGISTER_X),
-        stack_ptx_encode_input(REGISTER_Y),
-        stack_ptx_encode_ptx_instruction_mul_ftz_f32,
-        stack_ptx_encode_return
-    };
-
-    static const StackPtxInstruction mishmash_inputs[] = {
-        stack_ptx_encode_input(REGISTER_X),
-        stack_ptx_encode_ptx_instruction_sin_approx_ftz_f32,
-        stack_ptx_encode_input(REGISTER_Y),
-        stack_ptx_encode_ptx_instruction_cos_approx_ftz_f32,
-        stack_ptx_encode_ptx_instruction_mul_ftz_f32,
-        stack_ptx_encode_constant_f32(1.4f),
         stack_ptx_encode_ptx_instruction_add_ftz_f32,
+        // stack_ptx_encode_input(REGISTER_Y),
+        // stack_ptx_encode_ptx_instruction_add_ftz_f32,
         stack_ptx_encode_return
     };
 
@@ -265,38 +261,6 @@ main() {
             stack_ptx_workspace_size
         );
 
-    printf("Inject (mul_inputs) PTX\n");
-
-    float mul_result = 
-        run_stack_ptx_instructions(
-            device_compute_capability_major,
-            device_compute_capability_minor,
-            d_out,
-            ptx_inject,
-            registers, num_registers,
-            requests,
-            num_requests,
-            mul_inputs,
-            stack_ptx_workspace,
-            stack_ptx_workspace_size
-        );
-
-    printf("Inject (mishmash_inputs) PTX\n");
-
-    float mishmash_result = 
-        run_stack_ptx_instructions(
-            device_compute_capability_major,
-            device_compute_capability_minor,
-            d_out,
-            ptx_inject,
-            registers, num_registers,
-            requests,
-            num_requests,
-            mishmash_inputs,
-            stack_ptx_workspace,
-            stack_ptx_workspace_size
-        );
-
     cuCheck( cuMemFree(d_out) );
     cuCheck( cuCtxDestroy(cu_context) );
 
@@ -304,7 +268,5 @@ main() {
 
     ptxInjectCheck( ptx_inject_destroy(ptx_inject) );
 
-    printf("Inject (add_inputs) result (should be 8):\t%f\n", add_result);
-    printf("Inject (mul_inputs) result (should be 15):\t%f\n", mul_result);
-    printf("Inject (mishmash_inputs) result:\t\t%f\n", mishmash_result);
+    printf("Inject (add_inputs) result (should be 12):\t%f\n", add_result);
 }

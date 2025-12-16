@@ -9,9 +9,7 @@
 #define STACK_PTX_INJECT_SERIALIZE_IMPLEMENTATION
 #include <stack_ptx_inject_serialize.h>
 
-#include <ptx_inject_default_generated_types.h>
-// #include <stack_ptx_default_info.h>
-#include <stack_ptx_default_generated_types.h>
+#include <stack_ptx_example_descriptions.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,14 +37,7 @@ static const StackPtxCompilerInfo stack_ptx_compiler_info = {
 int
 main() {
     PtxInjectHandle ptx_inject;
-    ptxInjectCheck(
-        ptx_inject_create(
-            &ptx_inject, 
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
-            g_annotated_ptx_data
-        )
-    );
+    ptxInjectCheck( ptx_inject_create(&ptx_inject, g_annotated_ptx_data) );
 
     enum Register {
         REGISTER_X,
@@ -65,9 +56,9 @@ main() {
     size_t inject_func_idx;
     ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "func", &inject_func_idx, NULL, NULL) );
 
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "x", NULL, NULL, NULL, &registers[REGISTER_X].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "y", NULL, NULL, NULL, &registers[REGISTER_Y].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "z", NULL, NULL, NULL, &registers[REGISTER_Z].name) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_x", NULL, &registers[REGISTER_X].name, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_y", NULL, &registers[REGISTER_Y].name, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_z", NULL, &registers[REGISTER_Z].name, NULL, NULL, NULL) );
 
     static const size_t requests[] = {
         REGISTER_Z
@@ -106,8 +97,6 @@ main() {
     };
 
     StackPtxInjectCompilerStateSerialize compiler_state_serialize = {
-        .data_type_infos = ptx_inject_data_type_infos,
-        .num_data_type_infos = num_ptx_inject_data_type_infos,
         .annotated_ptx = g_annotated_ptx_data,
         .compiler_info = &stack_ptx_compiler_info,
         .stack_info = &stack_ptx_stack_info,

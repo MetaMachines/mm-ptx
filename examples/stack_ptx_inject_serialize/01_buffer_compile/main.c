@@ -9,9 +9,7 @@
 #define STACK_PTX_INJECT_SERIALIZE_IMPLEMENTATION
 #include <stack_ptx_inject_serialize.h>
 
-#include <ptx_inject_default_generated_types.h>
-// #include <stack_ptx_default_info.h>
-#include <stack_ptx_default_generated_types.h>
+#include <stack_ptx_example_descriptions.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,8 +36,6 @@ static const StackPtxCompilerInfo stack_ptx_compiler_info = {
 
 StackPtxInjectSerializeResult
 compiler_serialize(
-    const PtxInjectDataTypeInfo* data_type_infos,
-    size_t num_data_type_infos,
     const StackPtxCompilerInfo* compiler_info,
     const StackPtxStackInfo* stack_info,
     const char* annotated_ptx,
@@ -59,18 +55,6 @@ compiler_serialize(
 
     size_t total_bytes = 0;
     size_t buffer_offset = 0;
-
-    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
-        ptx_inject_data_type_infos_serialize(
-            data_type_infos,
-            num_data_type_infos,
-            buffer ? buffer + total_bytes : NULL,
-            buffer ? buffer_size - total_bytes : 0,
-            &buffer_offset
-        )
-    );
-
-    total_bytes += buffer_offset;
 
     _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
         stack_ptx_compiler_info_serialize(
@@ -159,8 +143,6 @@ compiler_deserialize(
     uint8_t* buffer,
     size_t buffer_size,
     size_t* buffer_bytes_written_out,
-    PtxInjectDataTypeInfo** data_type_infos_out,
-    size_t* num_data_type_infos_out,
     StackPtxCompilerInfo** compiler_info_out,
     StackPtxStackInfo** stack_info_out,
     char** annotated_ptx,
@@ -183,25 +165,6 @@ compiler_deserialize(
     size_t total_bytes = 0;
 
     if (buffer_size < total_bytes) {
-        _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
-    }
-
-    _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
-        ptx_inject_data_type_infos_deserialize(
-            wire + total_wire_used,
-            wire_size - total_wire_used,
-            &wire_used,
-            buffer ? buffer + total_bytes : NULL,
-            buffer ? buffer_size - total_bytes : 0,
-            &buffer_offset,
-            data_type_infos_out,
-            num_data_type_infos_out
-        )
-    );
-    total_wire_used += wire_used;
-    total_bytes += buffer_offset;
-
-    if (buffer && buffer_size < total_bytes) {
         _STACK_PTX_INJECT_SERIALIZE_ERROR( STACK_PTX_INJECT_SERIALIZE_ERROR_INSUFFICIENT_BUFFER );
     }
 
@@ -345,14 +308,7 @@ int
 main() {
 
     PtxInjectHandle ptx_inject;
-    ptxInjectCheck(
-        ptx_inject_create(
-            &ptx_inject, 
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
-            g_annotated_ptx_data
-        )
-    );
+    ptxInjectCheck( ptx_inject_create(&ptx_inject, g_annotated_ptx_data) );
 
     enum Register {
         REGISTER_X,
@@ -371,9 +327,9 @@ main() {
     size_t inject_func_idx;
     ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "func", &inject_func_idx, NULL, NULL) );
 
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "x", NULL, NULL, NULL, &registers[REGISTER_X].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "y", NULL, NULL, NULL, &registers[REGISTER_Y].name) );
-    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "z", NULL, NULL, NULL, &registers[REGISTER_Z].name) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_x", NULL, &registers[REGISTER_X].name, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_y", NULL, &registers[REGISTER_Y].name, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "v_z", NULL, &registers[REGISTER_Z].name, NULL, NULL, NULL) );
 
     static const size_t requests[] = {
         REGISTER_Z
@@ -416,8 +372,6 @@ main() {
 
     stackPtxInjectSerializeCheck(
         compiler_serialize(
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
             &stack_ptx_compiler_info,
             &stack_ptx_stack_info,
             g_annotated_ptx_data,
@@ -439,8 +393,6 @@ main() {
 
     stackPtxInjectSerializeCheck(
         compiler_serialize(
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
             &stack_ptx_compiler_info,
             &stack_ptx_stack_info,
             g_annotated_ptx_data,
@@ -458,8 +410,6 @@ main() {
         )
     );
 
-    PtxInjectDataTypeInfo* deserialized_data_type_infos = NULL;
-    size_t deserialized_num_data_type_infos = 0;
     StackPtxCompilerInfo* deserialized_compiler_info = NULL;
     StackPtxStackInfo* deserialized_stack_info = NULL;
     char* deserialized_annotated_ptx = NULL;
@@ -484,8 +434,6 @@ main() {
             deserialized_buffer,
             deserialized_buffer_size,
             &deserialized_buffer_size,
-            &deserialized_data_type_infos,
-            &deserialized_num_data_type_infos,
             &deserialized_compiler_info,
             &deserialized_stack_info,
             &deserialized_annotated_ptx,
@@ -510,8 +458,6 @@ main() {
             deserialized_buffer,
             deserialized_buffer_size,
             &deserialized_buffer_size,
-            &deserialized_data_type_infos,
-            &deserialized_num_data_type_infos,
             &deserialized_compiler_info,
             &deserialized_stack_info,
             &deserialized_annotated_ptx,
@@ -523,15 +469,6 @@ main() {
             &deserialized_instruction_stubs,
             &deserialized_num_instruction_stubs,
             &deserialized_extra
-        )
-    );
-
-    ASSERT( 
-        ptx_inject_data_type_infos_equal(
-            ptx_inject_data_type_infos,
-            num_ptx_inject_data_type_infos,
-            deserialized_data_type_infos,
-            deserialized_num_data_type_infos
         )
     );
 

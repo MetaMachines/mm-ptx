@@ -7,17 +7,14 @@
 #define PTX_INJECT_IMPLEMENTATION
 #include <ptx_inject.h>
 
-#define STACK_PTX_IMPLEMENTATION
-#include <stack_ptx.h>
+#include <cuda.h>
+#include <math.h>
+#include <time.h>
 
-#include <stack_ptx_example_descriptions.h>
-#include <stack_ptx_default_info.h>
-
-#include <cuda_helper.h>
 #include <nvptx_helper.h>
 #include <ptx_inject_helper.h>
+#include <cuda_helper.h>
 #include <mma_helper.h>
-#include <time.h>
 
 #define INCBIN_SILENCE_BITCODE_WARNING
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
@@ -32,59 +29,6 @@ INCTXT(annotated_ptx, PTX_KERNEL);
 #define STUB_BUFFER_SIZE 1000000ull
 
 #define CLOCK_MULTIPLIER 1000000.0
-
-static const int execution_limit = 100;
-
-enum InjectSite {
-    INJECT_MMA,
-    INJECT_EPILOGUE,
-    INJECT_NUM_SITES
-};
-
-typedef struct {
-    const char* name;  // "multiply", "accumulate", "epilogue"
-    size_t idx;        // filled at runtime via ptx_inject_inject_info_by_name
-} InjectSiteInfo;
-
-static InjectSiteInfo g_inject_sites[INJECT_NUM_SITES] = {
-    [INJECT_MMA]   =    { "mma",   0 },
-    [INJECT_EPILOGUE] = { "epilogue",   0 },
-};
-
-enum Register {
-    REGISTER_MMA_V_A_IN,
-    REGISTER_MMA_V_B_IN,
-    REGISTER_MMA_V_C_MOD,
-    REGISTER_EPILOGUE_V_C_IN,
-    REGISTER_EPILOGUE_V_C_OUT,
-    REGISTER_NUM_ENUMS
-};
-
-static StackPtxRegister registers[] = {
-    [REGISTER_MMA_V_A_IN] =         { NULL, STACK_PTX_STACK_TYPE_F32 },
-    [REGISTER_MMA_V_B_IN] =         { NULL, STACK_PTX_STACK_TYPE_F32 },
-    [REGISTER_MMA_V_C_MOD] =        { NULL, STACK_PTX_STACK_TYPE_F32 },
-    [REGISTER_EPILOGUE_V_C_IN] =    { NULL, STACK_PTX_STACK_TYPE_F32 },
-    [REGISTER_EPILOGUE_V_C_OUT] =   { NULL, STACK_PTX_STACK_TYPE_F32 },
-};
-static const size_t num_registers = REGISTER_NUM_ENUMS;
-
-typedef struct {
-    enum InjectSite site;
-    const char* var_name;   // name as seen in PTX_INJECT annotations
-    enum Register reg;      // which entry in registers[] to fill
-} RegisterBinding;
-
-static const RegisterBinding g_register_bindings[] = {
-    { INJECT_MMA,   "v_a",  REGISTER_MMA_V_A_IN},
-    { INJECT_MMA,   "v_b",  REGISTER_MMA_V_B_IN},
-    { INJECT_MMA,   "v_c",  REGISTER_MMA_V_C_MOD},
-
-    { INJECT_EPILOGUE, "v_c_in", REGISTER_EPILOGUE_V_C_IN },
-    { INJECT_EPILOGUE, "v_c_out",REGISTER_EPILOGUE_V_C_OUT},
-
-};
-static const size_t g_num_register_bindings = sizeof(g_register_bindings) / sizeof(g_register_bindings[0]);
 
 static
 void
@@ -160,18 +104,6 @@ main() {
     ptxInjectCheck( ptx_inject_create(&ptx_inject, g_annotated_ptx_data) );
     time_end = clock();
 
-    size_t stack_ptx_workspace_size;
-    stackPtxCheck(
-        stack_ptx_compile_workspace_size(
-            &compiler_info,
-            &stack_ptx_stack_info, 
-            &stack_ptx_workspace_size
-        )
-    );
-
-    // We allocate the memory for the workspace.
-    void* stack_ptx_workspace = malloc(stack_ptx_workspace_size);
-
     printf("Parse/Process Inject PTX: %6d micros\n", (int)((time_end - time_start) / CLOCKS_PER_SEC * CLOCK_MULTIPLIER));
     printf("\n");
     // Print the stats of the injects that we're found
@@ -179,55 +111,57 @@ main() {
     printf("\n");
 
     size_t num_injects_found;
-    ptxInjectCheck(ptx_inject_num_injects(ptx_inject, &num_injects_found));
-    ASSERT(num_injects_found == INJECT_NUM_SITES);
+    ptxInjectCheck( ptx_inject_num_injects(ptx_inject, &num_injects_found) );
 
-    for (size_t s = 0; s < INJECT_NUM_SITES; ++s) {
-        ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, g_inject_sites[s].name, &g_inject_sites[s].idx, NULL, NULL) );
-    }
+    // We should have 3 injects inside the gemm, multiply, accumulate and epilogue
+    ASSERT(num_injects_found == 2);
 
-    char* mma_stub_buffer = (char*)malloc(STUB_BUFFER_SIZE);
-    char* epilogue_stub_buffer = (char*)malloc(STUB_BUFFER_SIZE);
+    const char* mma_register_name_v_a;
+    const char* mma_register_name_v_b;
+    const char* mma_register_name_v_c;
+
+    const char* epilogue_register_name_v_c_in;
+    const char* epilogue_register_name_v_c_out;
+
+    // We now need to ask which index in the stub buffer each inject needs to be at
+    size_t mma_func_idx;
+    size_t epilogue_func_idx;
+
+    ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "mma", &mma_func_idx, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_inject_info_by_name(ptx_inject, "epilogue", &epilogue_func_idx, NULL, NULL) );
+
+    // Grab the "normalized" register names of the different operators inside the gemm.
+    // The multiply, accumulate and epilogue operations.
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, mma_func_idx, "v_a", NULL, &mma_register_name_v_a, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, mma_func_idx, "v_b", NULL, &mma_register_name_v_b, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, mma_func_idx, "v_c", NULL, &mma_register_name_v_c, NULL, NULL, NULL) );
+
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, epilogue_func_idx, "v_c_in", NULL, &epilogue_register_name_v_c_in, NULL, NULL, NULL) );
+    ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, epilogue_func_idx, "v_c_out", NULL, &epilogue_register_name_v_c_out, NULL, NULL, NULL) );
+
+    char *mma_stub_buffer = (char *)malloc(STUB_BUFFER_SIZE);
+    char *epilogue_stub_buffer = (char *)malloc(STUB_BUFFER_SIZE);
 
     const char* ptx_stubs[2];
 
-    // We now need to ask which index in the stub buffer each inject needs to be at
-    size_t mma_func_idx   = g_inject_sites[INJECT_MMA].idx;
-    size_t epilogue_func_idx   = g_inject_sites[INJECT_EPILOGUE].idx;
-    
-    // Set up the buffers to go in to the proper indicies as specified by the inject_info function calls.
     ptx_stubs[mma_func_idx] = mma_stub_buffer;
     ptx_stubs[epilogue_func_idx] = epilogue_stub_buffer;
 
-    for (size_t i = 0; i < g_num_register_bindings; ++i) {
-        const RegisterBinding* b = &g_register_bindings[i];
-        size_t inject_idx = g_inject_sites[b->site].idx;
-
-        ptxInjectCheck( ptx_inject_variable_info_by_name(ptx_inject, inject_idx, b->var_name, NULL, &registers[b->reg].name, NULL, NULL, NULL) );
-    }
-
-    // We need the multiply instructions to be assigned to the "diff" register name
-    const size_t mma_requests[] = { REGISTER_MMA_V_C_MOD };
-    static const size_t num_mma_requests = STACK_PTX_ARRAY_NUM_ELEMS(mma_requests);
-
-    const size_t epilogue_requests[] = { REGISTER_EPILOGUE_V_C_OUT };
-    static const size_t num_epilogue_requests = STACK_PTX_ARRAY_NUM_ELEMS(epilogue_requests);
-
     cuCheck( cuInit(0) );
-    CUdevice cu_device;
+    CUdevice device;
     
-    cuCheck( cuDeviceGet(&cu_device, 0) );
+    cuCheck( cuDeviceGet(&device, 0) );
     
     int device_compute_capability_major;
     int device_compute_capability_minor;
 
-    get_device_capability(cu_device, &device_compute_capability_major, &device_compute_capability_minor);
+    get_device_capability(device, &device_compute_capability_major, &device_compute_capability_minor);
 
     printf("Device(0) has compute capability: sm_%d%d\n\n", device_compute_capability_major, device_compute_capability_minor);
 
     CUcontext cu_context;
     
-    cuCheck( cuContextCreate(&cu_context, cu_device) );
+    cuCheck( cuContextCreate(&cu_context, device) );
 
     char* rendered_ptx;
     size_t num_bytes_written;
@@ -260,83 +194,26 @@ main() {
     cuCheck( cuMemcpyHtoD(d_a, h_a, (size_t)M * (size_t)K * sizeof(float)) );
     cuCheck( cuMemcpyHtoD(d_b, h_b, (size_t)N * (size_t)K * sizeof(float)) );
 
-    stackPtxCheck(
-        stack_ptx_compile(
-            &compiler_info,
-            &stack_ptx_stack_info,
-            (StackPtxInstruction[]) {
-                stack_ptx_encode_input(REGISTER_EPILOGUE_V_C_IN),
-                stack_ptx_encode_return
-            },
-            registers, REGISTER_NUM_ENUMS,
-            NULL, 0,
-            epilogue_requests,
-            num_epilogue_requests,
-            execution_limit,
-            stack_ptx_workspace,
-            stack_ptx_workspace_size,
-            epilogue_stub_buffer,
-            STUB_BUFFER_SIZE,
-            &num_bytes_written
-        )
+    // Now that everything is setup, lets run this kernel as a typical gemm mma
+    // We can use fma directly here.
+
+    snprintf(mma_stub_buffer, STUB_BUFFER_SIZE, 
+        "fma.rn.ftz.f32 %%%3$s, %%%2$s, %%%1$s, %%%3$s;\n",
+        mma_register_name_v_a,
+        mma_register_name_v_b,
+        mma_register_name_v_c
     );
 
-    // Multiply as gemm or `dot product`
-    // diff = v_a * v_b
-    static const StackPtxInstruction mma_gemm_instructions[] = {
-        stack_ptx_encode_input(REGISTER_MMA_V_C_MOD),
-        stack_ptx_encode_input(REGISTER_MMA_V_B_IN),
-        stack_ptx_encode_input(REGISTER_MMA_V_A_IN),
-        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
-        stack_ptx_encode_return
-    };
-
-    // Multiply as L1 Norm
-    // diff = abs(v_a - v_b)
-    static const StackPtxInstruction mma_l1_norm_instructions[] = {
-        stack_ptx_encode_input(REGISTER_MMA_V_A_IN),
-        stack_ptx_encode_input(REGISTER_MMA_V_B_IN),
-        stack_ptx_encode_ptx_instruction_sub_ftz_f32,
-        stack_ptx_encode_ptx_instruction_abs_ftz_f32,
-        stack_ptx_encode_input(REGISTER_MMA_V_C_MOD),
-        stack_ptx_encode_ptx_instruction_add_ftz_f32,
-        stack_ptx_encode_return
-    };
-
-    // Multiply as L2 Norm
-    // diff = (v_a - v_b) * (v_a - v_b)
-    static const StackPtxInstruction mma_l2_norm_instructions[] = {
-        stack_ptx_encode_input(REGISTER_MMA_V_A_IN),
-        stack_ptx_encode_input(REGISTER_MMA_V_B_IN),
-        stack_ptx_encode_ptx_instruction_sub_ftz_f32,
-        stack_ptx_encode_meta_dup(STACK_PTX_STACK_TYPE_F32), // Duplicate the ast value at the top of the f32 stack
-        stack_ptx_encode_ptx_instruction_mul_ftz_f32,
-        stack_ptx_encode_input(REGISTER_MMA_V_C_MOD),
-        stack_ptx_encode_ptx_instruction_add_ftz_f32,
-        stack_ptx_encode_return
-    };
-    
-    // Set up the multiply operator to be just v_a * v_b for a mma gemm
-    stackPtxCheck(
-        stack_ptx_compile(
-            &compiler_info,
-            &stack_ptx_stack_info,
-            mma_gemm_instructions,
-            registers, REGISTER_NUM_ENUMS,
-            NULL, 0,
-            mma_requests,
-            num_mma_requests,
-            execution_limit,
-            stack_ptx_workspace,
-            stack_ptx_workspace_size,
-            mma_stub_buffer,
-            STUB_BUFFER_SIZE,
-            &num_bytes_written
-        )
+    snprintf(epilogue_stub_buffer, STUB_BUFFER_SIZE,
+        "mov.f32 %%%2$s, %%%1$s;\n",
+        epilogue_register_name_v_c_in,
+        epilogue_register_name_v_c_out
     );
 
+    // Take the stubs and use it to render new ptx
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 2, &num_bytes_written);
+
     time_end = clock();
     printf("MMA\n");
     printf("---------------------------------------------\n");
@@ -379,28 +256,28 @@ main() {
     print_matrix(M, N, h_c_gold, ldc, matrix_print_limit);
     printf("---------------------------------------------\n");
 
-    // We can now easily run this also as an L1 norm kernel.
-    stackPtxCheck(
-        stack_ptx_compile(
-            &compiler_info,
-            &stack_ptx_stack_info,
-            mma_l1_norm_instructions,
-            registers, REGISTER_NUM_ENUMS,
-            NULL, 0,
-            mma_requests,
-            num_mma_requests,
-            execution_limit,
-            stack_ptx_workspace,
-            stack_ptx_workspace_size,
-            mma_stub_buffer,
-            STUB_BUFFER_SIZE,
-            &num_bytes_written
-        )
+    // We can now easily run this as an L1 norm kernel.
+
+    // // The multiply is now abs(x-y)
+    snprintf(mma_stub_buffer, STUB_BUFFER_SIZE, 
+        "sub.ftz.f32 %%%1$s, %%%2$s, %%%1$s;\n\t  "
+        "abs.ftz.f32 %%%1$s, %%%1$s;\n\t  "
+        "add.ftz.f32 %%%3$s, %%%3$s, %%%1$s;\n",
+        mma_register_name_v_a,
+        mma_register_name_v_b,
+        mma_register_name_v_c
+    );
+
+    snprintf(epilogue_stub_buffer, STUB_BUFFER_SIZE,
+        "mov.f32 %%%2$s, %%%1$s;\n",
+        epilogue_register_name_v_c_in,
+        epilogue_register_name_v_c_out
     );
 
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 2, &num_bytes_written);
     time_end = clock();
+
     printf("L1\n");
     printf("---------------------------------------------\n");
     printf("Render PTX:\t\t%6d micros\n", (int)((time_end - time_start) / CLOCKS_PER_SEC * CLOCK_MULTIPLIER));
@@ -443,27 +320,28 @@ main() {
     printf("---------------------------------------------\n");
 
     // Lastly we will run this as an L2 norm kernel
-    stackPtxCheck(
-        stack_ptx_compile(
-            &compiler_info,
-            &stack_ptx_stack_info,
-            mma_l2_norm_instructions,
-            registers, REGISTER_NUM_ENUMS,
-            NULL, 0,
-            mma_requests,
-            num_mma_requests,
-            execution_limit,
-            stack_ptx_workspace,
-            stack_ptx_workspace_size,
-            mma_stub_buffer,
-            STUB_BUFFER_SIZE,
-            &num_bytes_written
-        )
+
+    // For multiply we do (x-y)^2
+    snprintf(mma_stub_buffer, STUB_BUFFER_SIZE, 
+        "sub.ftz.f32 %%%1$s, %%%2$s, %%%1$s;\n\t  "
+        "mul.ftz.f32 %%%1$s, %%%1$s, %%%1$s;\n\t  "
+        "add.ftz.f32 %%%3$s, %%%3$s, %%%1$s;\n",
+        mma_register_name_v_a,
+        mma_register_name_v_b,
+        mma_register_name_v_c
+    );
+
+    // For epilogue we do nothing
+    snprintf(epilogue_stub_buffer, STUB_BUFFER_SIZE,
+        "mov.f32 %%%2$s, %%%1$s;\n",
+        epilogue_register_name_v_c_in,
+        epilogue_register_name_v_c_out
     );
 
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 2, &num_bytes_written);
     time_end = clock();
+    
     printf("L2\n");
     printf("---------------------------------------------\n");
     printf("Render PTX:\t\t%6d micros\n", (int)((time_end - time_start) / CLOCKS_PER_SEC * CLOCK_MULTIPLIER));
@@ -516,8 +394,6 @@ main() {
 
     free(epilogue_stub_buffer);
     free(mma_stub_buffer);
-
-    free(stack_ptx_workspace);
 
     ptxInjectCheck( ptx_inject_destroy(ptx_inject) );
     

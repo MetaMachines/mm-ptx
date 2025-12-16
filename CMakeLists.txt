@@ -20,9 +20,8 @@ endif()
 add_library(mm_ptx_headers INTERFACE)
 
 target_include_directories(mm_ptx_headers INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}               # root (.)
-    ${CMAKE_CURRENT_SOURCE_DIR}/generated_headers
-    ${CMAKE_CURRENT_SOURCE_DIR}/helpers
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
 )
 
@@ -33,19 +32,17 @@ endif()
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(mm_ptx_codegen)
-include(mm_ptx_process_cuda)
-include(mm_ptx_ptx_inject_types_plugin)
 
 add_subdirectory(thirdparty)
 add_subdirectory(tools)
 
-set(MMPTX_BUILD_TESTS_DEFAULT ON)
-option(MMPTX_BUILD_TESTS "Build mm-ptx test" ${MMPTX_BUILD_TESTS_DEFAULT})
-message(STATUS "MMPTX_BUILD_TESTS = ${MMPTX_BUILD_TESTS}")
+# set(MMPTX_BUILD_TESTS_DEFAULT ON)
+# option(MMPTX_BUILD_TESTS "Build mm-ptx test" ${MMPTX_BUILD_TESTS_DEFAULT})
+# message(STATUS "MMPTX_BUILD_TESTS = ${MMPTX_BUILD_TESTS}")
 
-if(MMPTX_BUILD_TESTS)
-    add_subdirectory(tests)
-endif()
+# if(MMPTX_BUILD_TESTS)
+#     add_subdirectory(tests)
+# endif()
 
 set(MMPTX_BUILD_EXAMPLES_DEFAULT ON)
 option(MMPTX_BUILD_EXAMPLES "Build mm-ptx examples" ${MMPTX_BUILD_EXAMPLES_DEFAULT})

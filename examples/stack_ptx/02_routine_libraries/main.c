@@ -14,7 +14,7 @@
 #define STACK_PTX_IMPLEMENTATION
 #include <stack_ptx.h>
 
-#include <stack_ptx_default_generated_types.h>
+#include <stack_ptx_example_descriptions.h>
 #include <stack_ptx_default_info.h>
 
 // We need to bring in the #defines first to setup the order with

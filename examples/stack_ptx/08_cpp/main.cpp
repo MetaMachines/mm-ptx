@@ -1,7 +1,7 @@
 #define STACK_PTX_IMPLEMENTATION
 #include <stack_ptx.h>
 
-#include <stack_ptx_default_generated_types.hpp>
+#include <stack_ptx_example_descriptions.hpp>
 
 #include <check_result_helper.h>
 
@@ -28,7 +28,6 @@ static const StackPtxRegister registers[] = {
     {"out_0", static_cast<size_t>(StackType::U32)}
 };
 static const size_t num_registers = static_cast<size_t>(Register::NUM_ENUMS);
-
 
 static const StackPtxInstruction instructions[] = {
     encode_constant_u32(10),

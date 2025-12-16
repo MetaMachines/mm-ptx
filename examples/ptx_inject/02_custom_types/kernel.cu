@@ -1,5 +1,7 @@
 #include <ptx_inject.h>
 
+#define PTX_TYPE_INFO_DOG PTX_TYPES_DESC(f32, f32, f, ID)
+
 extern "C"
 __global__
 void
@@ -8,10 +10,9 @@ kernel(float* out) {
     float y = 3;
     float z;
     PTX_INJECT("func",
-        PTX_OUT (F32, v_z, z),
-        PTX_MOD (F32, v_x, x),
-        PTX_IN  (F32, v_y, y)
+        PTX_OUT (DOG, z, z),
+        PTX_MOD (DOG, x, x),
+        PTX_IN  (DOG, y, y)
     );
     *out = z;
 }
-
