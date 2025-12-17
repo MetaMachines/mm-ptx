@@ -567,10 +567,15 @@ _ptx_inject_create(
     PtxInjectInjection* unique_injects = ptx_inject->injects;
 
     while(true) {
-        const char* const start_of_inject = strstr(src_ptr, _ptx_inject_ptx_header_str_start);
+        const char* start_of_inject = strstr(src_ptr, _ptx_inject_ptx_header_str_start);
         
         if (start_of_inject == NULL) break;
 
+        // If character before this is a tab, we should not copy it to keep injected PTX nice looking
+        size_t maybe_clobber_tab = 0;
+        if (start_of_inject != processed_ptx_src && *(start_of_inject-1) == '\t') {
+            maybe_clobber_tab = 1;
+        }
         ptx_inject->num_inject_sites++;
 
         _PTX_INJECT_CHECK_RET(
@@ -579,7 +584,7 @@ _ptx_inject_create(
                 ptx_inject->stub_buffer_size,
                 &stubs_bytes_written,
                 "%.*s",
-                start_of_inject - src_ptr,
+                start_of_inject - src_ptr - maybe_clobber_tab,
                 src_ptr
             )
         );
@@ -1335,18 +1340,18 @@ ptx_inject_render_ptx(
 // Emit PTX text pieces
 // ============================================================================
 #define PTX_EMIT_DECL_AT(idx, e) \
-  "  .reg ." PTX_REGTYPE_STR(PTX_TYPE(e)) " " PTX_TMP_REG_STR(idx) ";\n\t"
+  ".reg ." PTX_REGTYPE_STR(PTX_TYPE(e)) " " PTX_TMP_REG_STR(idx) ";\n\t"
 
 #define PTX_EMIT_LOAD_AT(idx, e) \
-  "  mov." PTX_MOV_STR(PTX_TYPE(e)) " " PTX_TMP_REG_STR(idx) ", " PTX_OP_STR(idx) ";\n\t"
+  "mov." PTX_MOV_STR(PTX_TYPE(e)) " " PTX_TMP_REG_STR(idx) ", " PTX_OP_STR(idx) ";\n\t"
 
 #define PTX_EMIT_STORE_AT(idx, e) \
-  "  mov." PTX_MOV_STR(PTX_TYPE(e)) " " PTX_OP_STR(idx) ", " PTX_TMP_REG_STR(idx) ";\n\t"
+  "mov." PTX_MOV_STR(PTX_TYPE(e)) " " PTX_OP_STR(idx) ", " PTX_TMP_REG_STR(idx) ";\n\t"
 
 // Marker line: explicit stable reg name + metadata
 // (idx must be the stable operand index: [mods][outs][ins])
 #define PTX_EMIT_MARK_AT(idx, e) \
-  "  // " PTX_TMP_REG_NAME_STR(idx) " " PTX_KINDCHAR(PTX_KIND(e)) " " \
+  "// " PTX_TMP_REG_NAME_STR(idx) " " PTX_KINDCHAR(PTX_KIND(e)) " " \
   PTX_REGTYPE_STR(PTX_TYPE(e)) " " PTX_STR(PTX_TYPE(e)) " " PTX_STR(PTX_NAME(e)) "\n\t"
 
 // ============================================================================
@@ -1435,12 +1440,12 @@ ptx_inject_render_ptx(
     BOOST_PP_SEQ_FOR_EACH_I(PTX_LOAD_MOD_I, _,                PTX_MOD_SEQ(seq)) \
     BOOST_PP_SEQ_FOR_EACH_I(PTX_LOAD_IN_I,  PTX_OFF_IN(seq),  PTX_IN_SEQ(seq)) \
     \
-    "  // PTX_INJECT_START " site_str "\n\t" \
+    "// PTX_INJECT_START " site_str "\n\t" \
     /* Marker lines (canonical order: MOD, OUT, IN) */ \
     BOOST_PP_SEQ_FOR_EACH_I(PTX_MARK_MOD_I, _,                PTX_MOD_SEQ(seq)) \
     BOOST_PP_SEQ_FOR_EACH_I(PTX_MARK_OUT_I, PTX_OFF_OUT(seq), PTX_OUT_SEQ(seq)) \
     BOOST_PP_SEQ_FOR_EACH_I(PTX_MARK_IN_I,  PTX_OFF_IN(seq),  PTX_IN_SEQ(seq)) \
-    "  // PTX_INJECT_END\n\t" \
+    "// PTX_INJECT_END\n\t" \
     \
     /* Marshal stable regs -> C outputs (mods + outs) */ \
     BOOST_PP_SEQ_FOR_EACH_I(PTX_STORE_MOD_I, _,                PTX_MOD_SEQ(seq)) \

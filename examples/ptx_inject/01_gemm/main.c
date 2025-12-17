@@ -198,14 +198,14 @@ main() {
     // We can use fma directly here.
 
     snprintf(mma_stub_buffer, STUB_BUFFER_SIZE, 
-        "fma.rn.ftz.f32 %%%3$s, %%%2$s, %%%1$s, %%%3$s;\n",
+        "\tfma.rn.ftz.f32 %%%3$s, %%%2$s, %%%1$s, %%%3$s;",
         mma_register_name_v_a,
         mma_register_name_v_b,
         mma_register_name_v_c
     );
 
     snprintf(epilogue_stub_buffer, STUB_BUFFER_SIZE,
-        "mov.f32 %%%2$s, %%%1$s;\n",
+        "\tmov.f32 %%%2$s, %%%1$s;",
         epilogue_register_name_v_c_in,
         epilogue_register_name_v_c_out
     );
@@ -213,8 +213,8 @@ main() {
     // Take the stubs and use it to render new ptx
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 2, &num_bytes_written);
-
     time_end = clock();
+
     printf("MMA\n");
     printf("---------------------------------------------\n");
     printf("Render PTX:\t\t%6d micros\n", (int)((time_end - time_start) / CLOCKS_PER_SEC * CLOCK_MULTIPLIER));
@@ -260,16 +260,16 @@ main() {
 
     // // The multiply is now abs(x-y)
     snprintf(mma_stub_buffer, STUB_BUFFER_SIZE, 
-        "sub.ftz.f32 %%%1$s, %%%2$s, %%%1$s;\n\t  "
-        "abs.ftz.f32 %%%1$s, %%%1$s;\n\t  "
-        "add.ftz.f32 %%%3$s, %%%3$s, %%%1$s;\n",
+        "\tsub.ftz.f32 %%%1$s, %%%2$s, %%%1$s;\n"
+        "\tabs.ftz.f32 %%%1$s, %%%1$s;\n"
+        "\tadd.ftz.f32 %%%3$s, %%%3$s, %%%1$s;",
         mma_register_name_v_a,
         mma_register_name_v_b,
         mma_register_name_v_c
     );
 
     snprintf(epilogue_stub_buffer, STUB_BUFFER_SIZE,
-        "mov.f32 %%%2$s, %%%1$s;\n",
+        "\tmov.f32 %%%2$s, %%%1$s;",
         epilogue_register_name_v_c_in,
         epilogue_register_name_v_c_out
     );
@@ -323,9 +323,9 @@ main() {
 
     // For multiply we do (x-y)^2
     snprintf(mma_stub_buffer, STUB_BUFFER_SIZE, 
-        "sub.ftz.f32 %%%1$s, %%%2$s, %%%1$s;\n\t  "
-        "mul.ftz.f32 %%%1$s, %%%1$s, %%%1$s;\n\t  "
-        "add.ftz.f32 %%%3$s, %%%3$s, %%%1$s;\n",
+        "\tsub.ftz.f32 %%%1$s, %%%2$s, %%%1$s;\n"
+        "\tmul.ftz.f32 %%%1$s, %%%1$s, %%%1$s;\n"
+        "\tadd.ftz.f32 %%%3$s, %%%3$s, %%%1$s;",
         mma_register_name_v_a,
         mma_register_name_v_b,
         mma_register_name_v_c
@@ -333,7 +333,7 @@ main() {
 
     // For epilogue we do nothing
     snprintf(epilogue_stub_buffer, STUB_BUFFER_SIZE,
-        "mov.f32 %%%2$s, %%%1$s;\n",
+        "\tmov.f32 %%%2$s, %%%1$s;",
         epilogue_register_name_v_c_in,
         epilogue_register_name_v_c_out
     );
@@ -341,7 +341,7 @@ main() {
     time_start = clock();
     rendered_ptx = render_injected_ptx(ptx_inject, ptx_stubs, 2, &num_bytes_written);
     time_end = clock();
-    
+
     printf("L2\n");
     printf("---------------------------------------------\n");
     printf("Render PTX:\t\t%6d micros\n", (int)((time_end - time_start) / CLOCKS_PER_SEC * CLOCK_MULTIPLIER));

@@ -53,7 +53,7 @@ main() {
      // We will inject a simple add instruction that just does z = y + x;
     char *stub_buffer = (char *)malloc(STUB_BUFFER_SIZE);
     snprintf(stub_buffer, STUB_BUFFER_SIZE, 
-        "add.ftz.f32 %%%3$s, %%%2$s, %%%1$s;\n",
+        "\tadd.ftz.f32 %%%3$s, %%%2$s, %%%1$s;",
         register_name_x,
         register_name_y,
         register_name_z
