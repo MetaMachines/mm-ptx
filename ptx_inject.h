@@ -919,6 +919,9 @@ PtxInjectResult
 ptx_inject_destroy(
     PtxInjectHandle handle
 ) {
+    if (handle != NULL) {
+        free(handle);
+    }
     return PTX_INJECT_SUCCESS;
 }
 
