@@ -1252,7 +1252,14 @@ ptx_inject_render_ptx(
 #define PTX_CONSTRAINT_STR(tok) PTX_TYPES_STR(PTX_TYPES_T2(PTX_TYPES_INFO(tok)))
 #define PTX_BIND(tok, x)        PTX_TYPES_BIND_KIND(PTX_TYPES_T3(PTX_TYPES_INFO(tok)))(x)
 
-#include <boost/preprocessor.hpp>
+#include <boost/preprocessor/variadic/to_seq.hpp>
+#include <boost/preprocessor/variadic/size.hpp>
+#include <boost/preprocessor/seq/filter.hpp>
+#include <boost/preprocessor/seq/for_each_i.hpp>
+#include <boost/preprocessor/seq/size.hpp>
+#include <boost/preprocessor/arithmetic/add.hpp>
+#include <boost/preprocessor/punctuation/comma_if.hpp>
+#include <boost/preprocessor/stringize.hpp>
 
 // ============================================================================
 // Helpers
