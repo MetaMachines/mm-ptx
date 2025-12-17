@@ -18,11 +18,13 @@ if(CUDA_MAJOR_VERSION EQUAL 13)
 endif()
 
 add_library(mm_ptx_headers INTERFACE)
+add_subdirectory(thirdparty/boost_subset)
+target_link_libraries(mm_ptx_headers INTERFACE vendor_boost_preprocessor)
 
 target_include_directories(mm_ptx_headers INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools
-    ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/tools
+  ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
 )
 
 if(CUDA_MAJOR_VERSION EQUAL 13)
