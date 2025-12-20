@@ -13,7 +13,8 @@ set_target_properties(${KERNEL_TARGET} PROPERTIES
 add_executable(${PROJECT_NAME} main.c)
 add_dependencies(${PROJECT_NAME} ${KERNEL_TARGET})
 target_compile_definitions(${PROJECT_NAME} PRIVATE PTX_KERNEL="$<TARGET_OBJECTS:${KERNEL_TARGET}>")
-set_source_files_properties(main.c PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu")
+set(KERNEL_PTX "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${KERNEL_TARGET}.dir/${CMAKE_CFG_INTDIR}/kernel.ptx")
+set_source_files_properties(main.c PROPERTIES OBJECT_DEPENDS "${KERNEL_PTX};${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu")
 
 target_link_libraries(
     ${PROJECT_NAME}
