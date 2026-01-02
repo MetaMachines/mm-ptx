@@ -5,6 +5,6 @@ authors:
     given-names: "Charlie"
     email: "charlie@metamachines.co"
 title: "mm-ptx: PTX Inject and Stack PTX"
-version: 0.1.0
+version: 1.0.0
 date-released: 2025-10-19
 url: "https://github.com/MetaMachines/mm-ptx"
