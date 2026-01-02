@@ -52,6 +52,46 @@
 
 #include <stddef.h>
 
+/**
+ * \mainpage PTX Inject: A library for injecting PTX into compiled CUDA code.
+ *
+ * \section usage Usage
+ *
+ * PTX Inject is a single-header, C99 library. Define PTX_INJECT_IMPLEMENTATION in
+ * exactly one translation unit to compile the implementation:
+ *
+ * \code
+ * #define PTX_INJECT_IMPLEMENTATION
+ * #include <ptx_inject.h>
+ * \endcode
+ *
+ * Define PTX_INJECT_DEBUG to turn errors into asserts at the call site:
+ *
+ * \code
+ * #define PTX_INJECT_DEBUG
+ * #define PTX_INJECT_IMPLEMENTATION
+ * #include <ptx_inject.h>
+ * \endcode
+ *
+ * Typical workflow:
+ * 1) In CUDA code compiled with nvcc, mark an inject site with PTX_INJECT and
+ *    PTX_IN/PTX_OUT/PTX_MOD operand descriptors.
+ * 2) Compile the CUDA source to PTX (nvcc or nvrtc). The PTX contains
+ *    PTX_INJECT_START/END markers and per-operand metadata.
+ * 3) Call ptx_inject_create on that PTX string to parse inject sites.
+ * 4) Query variable register names and build PTX stubs.
+ * 5) Call ptx_inject_render_ptx to insert stubs and produce injected PTX.
+ *
+ * You can override PTX_INJECT_MAX_UNIQUE_INJECTS to change the maximum number
+ * of unique inject sites. For custom operand types, define PTX_TYPE_INFO_<TOKEN>
+ * entries (or disable defaults with PTX_INJECT_NO_DEFAULT_TYPES).
+ */
+
+/**
+ * \brief PTX Inject status return codes.
+ *
+ * \details All PTX Inject API functions return a PtxInjectResult value.
+ */
 typedef enum {
     /** PTX Inject Operation was successful */
     PTX_INJECT_SUCCESS                              = 0,
@@ -84,7 +124,7 @@ typedef enum {
 /**
  * \brief PTX Inject mutation types.
  * 
- * \details Specifies how the inline-ptx sets the variable, as modifiable, output or input.
+ * \details Specifies how the inline PTX treats a variable: output-only, read-write, or input-only.
  */
 typedef enum {
     PTX_INJECT_MUT_TYPE_OUT,
@@ -94,13 +134,68 @@ typedef enum {
 } PtxInjectMutType;
 
 struct PtxInjectHandleImpl;
+/**
+ * \brief Opaque structure representing a PTX Inject handle.
+ */
 typedef struct PtxInjectHandleImpl* PtxInjectHandle;
 
+/**
+ * \brief Converts a PtxInjectResult enum value to a human-readable string.
+ *
+ * \param[in] result The PtxInjectResult enum value to convert.
+ * \return A null-terminated string describing the result or
+ * "PTX_INJECT_ERROR_INVALID_RESULT_ENUM" if `result` is out of bounds.
+ * \remarks Thread-safe.
+ */
 PTX_INJECT_PUBLIC_DEF const char* ptx_inject_result_to_string(PtxInjectResult result);
+
+/**
+ * \brief Creates a PTX injection context from PTX source code.
+ *
+ * \details The PTX must contain PTX_INJECT_START/END markers emitted by PTX_INJECT
+ * in CUDA code. The resulting handle stores inject metadata and a stub buffer that
+ * will be used by ptx_inject_render_ptx.
+ *
+ * \param[out] handle Pointer to a PtxInjectHandle to initialize.
+ * \param[in] processed_ptx_src Null-terminated string containing PTX source code
+ * with PTX Inject markers.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_create(PtxInjectHandle* handle, const char* processed_ptx_src);
+
+/**
+ * \brief Destroys a PTX injection context and frees associated resources.
+ *
+ * \param[in] handle The PtxInjectHandle to destroy.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_destroy(PtxInjectHandle handle);
+
+/**
+ * \brief Gets the number of unique injects found in the PTX.
+ *
+ * \param[in] handle The PtxInjectHandle.
+ * \param[out] num_injects_out The number of unique inject names found.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_num_injects(const PtxInjectHandle handle, size_t* num_injects_out);
 
+/**
+ * \brief Gets information about an inject by name.
+ *
+ * \param[in] handle The PtxInjectHandle.
+ * \param[in] inject_name The name of the inject as specified in PTX_INJECT.
+ * \param[out] inject_idx_out The index of the inject. Use this index to place a stub
+ * in the array passed to ptx_inject_render_ptx. Can be NULL to ignore.
+ * \param[out] inject_num_args_out The number of variables declared in the inject. Can be NULL to ignore.
+ * \param[out] inject_num_sites_out The number of sites where this inject appears (e.g., inlined or unrolled).
+ * Can be NULL to ignore.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_name(
     const PtxInjectHandle handle,
     const char* inject_name,
@@ -109,6 +204,17 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_name(
     size_t* inject_num_sites_out 
 );
 
+/**
+ * \brief Gets information about an inject by index.
+ *
+ * \param[in] handle The PtxInjectHandle.
+ * \param[in] inject_idx Index of the inject, in the range [0, num_injects).
+ * \param[out] inject_name_out The inject name. Can be NULL to ignore.
+ * \param[out] inject_num_args_out The number of variables declared in the inject. Can be NULL to ignore.
+ * \param[out] inject_num_sites_out The number of sites where this inject appears. Can be NULL to ignore.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_index(
     const PtxInjectHandle handle,
     size_t inject_idx,
@@ -117,6 +223,20 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_inject_info_by_index(
     size_t* inject_num_sites_out
 );
 
+/**
+ * \brief Gets information about a variable by inject index and variable name.
+ *
+ * \param[in] handle The PtxInjectHandle.
+ * \param[in] inject_idx Index of the inject, in the range [0, num_injects).
+ * \param[in] inject_variable_name Variable name as specified in PTX_INJECT.
+ * \param[out] inject_variable_arg_idx_out Variable index within the inject. Can be NULL to ignore.
+ * \param[out] inject_variable_register_name_out Stable PTX register name (e.g., "_x0"). Can be NULL to ignore.
+ * \param[out] inject_variable_mut_type_out Mutation type (out/mod/in). Can be NULL to ignore.
+ * \param[out] inject_variable_register_type_name_out PTX register type string (e.g., "f32"). Can be NULL to ignore.
+ * \param[out] inject_variable_data_type_name_out Data type token string (e.g., "F32"). Can be NULL to ignore.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe. Stable register names are consistent across duplicated sites.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_variable_info_by_name(
     const PtxInjectHandle handle,
     size_t inject_idx,
@@ -128,6 +248,20 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_variable_info_by_name(
     const char** inject_variable_data_type_name_out
 );
 
+/**
+ * \brief Gets information about a variable by inject index and variable index.
+ *
+ * \param[in] handle The PtxInjectHandle.
+ * \param[in] inject_idx Index of the inject, in the range [0, num_injects).
+ * \param[in] inject_variable_arg_idx Variable index within the inject.
+ * \param[out] inject_variable_name_out Variable name as specified in PTX_INJECT. Can be NULL to ignore.
+ * \param[out] inject_variable_register_name_out Stable PTX register name (e.g., "_x0"). Can be NULL to ignore.
+ * \param[out] inject_variable_mut_type_out Mutation type (out/mod/in). Can be NULL to ignore.
+ * \param[out] inject_variable_register_type_name_out PTX register type string (e.g., "f32"). Can be NULL to ignore.
+ * \param[out] inject_variable_data_type_name_out Data type token string (e.g., "F32"). Can be NULL to ignore.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_variable_info_by_index(
     const PtxInjectHandle handle,
     size_t inject_idx,
@@ -139,6 +273,19 @@ PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_variable_info_by_index(
     const char** inject_variable_data_type_name_out
 );
 
+/**
+ * \brief Renders PTX code with injected stubs, supporting measure-and-allocate usage.
+ *
+ * \param[in] handle The PtxInjectHandle.
+ * \param[in] ptx_stubs Array of null-terminated PTX snippets to inject. The array is ordered by inject index.
+ * \param[in] num_ptx_stubs Number of entries in ptx_stubs.
+ * \param[out] rendered_ptx_buffer Buffer to store the rendered PTX. Can be NULL to measure required size.
+ * \param[in] rendered_ptx_buffer_size Size of rendered_ptx_buffer in bytes. Ignored if rendered_ptx_buffer is NULL.
+ * \param[out] rendered_ptx_bytes_written_out Bytes written, or required size if rendered_ptx_buffer is NULL.
+ * \return PtxInjectResult indicating success or an error code.
+ * \remarks Blocking, thread-safe. To measure required size, pass NULL for rendered_ptx_buffer and
+ * 0 for rendered_ptx_buffer_size, then allocate and call again.
+ */
 PTX_INJECT_PUBLIC_DEC PtxInjectResult ptx_inject_render_ptx(
     const PtxInjectHandle handle,
     const char* const* ptx_stubs,
@@ -1201,6 +1348,14 @@ ptx_inject_render_ptx(
 #endif // PTX_INJECT_IMPLEMENTATION_ONCE
 #endif // PTX_INJECT_IMPLEMENTATION
 
+/**
+ * \brief CUDA-side helper macros for defining inject sites.
+ *
+ * \details These macros are available only when compiling with nvcc (__CUDACC__).
+ * Use PTX_INJECT or PTX_INJECT_TOK to mark a site, and PTX_IN/PTX_OUT/PTX_MOD
+ * to describe operands. Each operand can be declared as (type, name) or
+ * (type, name, expr), where type is a token with a PTX_TYPE_INFO_<TOKEN> entry.
+ */
 #if defined(__CUDACC__)
 
 #define PTX_TYPES_CAT2(a,b) a##b

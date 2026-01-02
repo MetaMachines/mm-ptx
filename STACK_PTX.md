@@ -67,14 +67,14 @@ Stack PTX code **can** be written by humans, but it is much better suited to pro
 ## Examples
 
 - **Stack PTX only**
-  - 📚 Overview: [examples/stack_ptx/README.md](examples/stack_ptx/README.md)
-  - ✅ Quickstart (simplest): [examples/stack_ptx/00_simple/main.c](examples/stack_ptx/00_simple/main.c)
+  - Overview: [examples/stack_ptx/README.md](examples/stack_ptx/README.md)
+  - Quickstart (simplest): [examples/stack_ptx/00_simple/main.c](examples/stack_ptx/00_simple/main.c)
 
 - **PTX Inject**
-  - 📖 Readme / concepts: [PTX_INJECT.md](PTX_INJECT.md)
+  - Readme / concepts: [PTX_INJECT.md](PTX_INJECT.md)
 
 - **Combined (Stack PTX + PTX Inject)**
-  - 🔗 Integrated examples: [examples/stack_ptx_inject/README.md](examples/stack_ptx_inject/README.md)
+  - Integrated examples: [examples/stack_ptx_inject/README.md](examples/stack_ptx_inject/README.md)
 
 - **Python Bindings for Stack PTX + PTX Inject + Examples**
   - https://github.com/MetaMachines/mm-ptx-py
