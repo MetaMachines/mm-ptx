@@ -27,7 +27,7 @@ add_library(stack_ptx_example_generated INTERFACE)
 target_include_directories(stack_ptx_example_generated INTERFACE "${GENERATED_INC_DIR}")
 add_dependencies(stack_ptx_example_generated stack_ptx_example_generated_headers)
 
-include_directories(common)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../common")
 
 add_subdirectory(ptx_inject)
 add_subdirectory(stack_ptx)

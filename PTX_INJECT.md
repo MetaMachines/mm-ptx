@@ -84,7 +84,7 @@ stubs[inject_idx] = stub;
 ptx_inject_render_ptx(ptx_inject, stubs, 1, out_buffer, out_size, &bytes_written);
 ```
 
-A helper that does measure-and-allocate for you lives at `thirdparty/mm-ptx/examples/common/ptx_inject_helper.h`.
+A helper that does measure-and-allocate for you lives at `common/ptx_inject_helper.h`.
 
 ## What PTX Inject emits
 The CUDA macro expands to an inline asm block that declares stable temporary registers, moves operand values in and out, and emits marker lines that are ignored by the PTX assembler but parsed by PTX Inject. The marker format looks like this inside PTX:
