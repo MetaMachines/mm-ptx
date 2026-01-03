@@ -38,13 +38,10 @@ include(mm_ptx_codegen)
 add_subdirectory(thirdparty)
 add_subdirectory(tools)
 
-# set(MMPTX_BUILD_TESTS_DEFAULT ON)
-# option(MMPTX_BUILD_TESTS "Build mm-ptx test" ${MMPTX_BUILD_TESTS_DEFAULT})
-# message(STATUS "MMPTX_BUILD_TESTS = ${MMPTX_BUILD_TESTS}")
-
-# if(MMPTX_BUILD_TESTS)
-#     add_subdirectory(tests)
-# endif()
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 
 set(MMPTX_BUILD_EXAMPLES_DEFAULT ON)
 option(MMPTX_BUILD_EXAMPLES "Build mm-ptx examples" ${MMPTX_BUILD_EXAMPLES_DEFAULT})
@@ -53,5 +50,4 @@ message(STATUS "MMPTX_BUILD_EXAMPLES = ${MMPTX_BUILD_EXAMPLES}")
 if(MMPTX_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
-
 
