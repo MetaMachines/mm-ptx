@@ -9,6 +9,121 @@ mm-ptx provides two header-only libraries for working with PTX:
 
 Both libraries are C99 compliant and live in single headers (`stack_ptx.h` and `ptx_inject.h`). CUDA toolchains are only required when compiling and running kernels.
 
+## PTX Inject: what you write
+Mark a site in CUDA with macros:
+```c++
+#include <ptx_inject.h>
+
+extern "C"
+__global__
+void kernel(float* out) {
+    float x = 5.0f;
+    float y = 3.0f;
+    float z = 0.0f;
+    PTX_INJECT("func",
+        PTX_IN (F32, x, x),
+        PTX_MOD(F32, y, y),
+        PTX_OUT(F32, z, z)
+    );
+    out[0] = z;
+}
+```
+
+Compile the CUDA to PTX (nvcc or nvrtc), then use the host-side API to inject a stub:
+```c
+#include <ptx_inject.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+const char* annotated_ptx = "..."; // PTX from nvcc/nvrtc
+
+PtxInjectHandle inject;
+ptx_inject_create(&inject, annotated_ptx);
+
+size_t inject_idx = 0;
+ptx_inject_inject_info_by_name(inject, "func", &inject_idx, NULL, NULL);
+
+const char* reg_x = NULL;
+const char* reg_y = NULL;
+const char* reg_z = NULL;
+ptx_inject_variable_info_by_name(inject, inject_idx, "x", NULL, &reg_x, NULL, NULL, NULL);
+ptx_inject_variable_info_by_name(inject, inject_idx, "y", NULL, &reg_y, NULL, NULL, NULL);
+ptx_inject_variable_info_by_name(inject, inject_idx, "z", NULL, &reg_z, NULL, NULL, NULL);
+
+char stub[256];
+snprintf(
+    stub,
+    sizeof(stub),
+    "\tadd.ftz.f32 %%%2$s, %%%1$s, %%%2$s;\n"
+    "\tadd.ftz.f32 %%%3$s, %%%1$s, %%%2$s;",
+    reg_x, reg_y, reg_z
+);
+
+size_t num_injects = 0;
+ptx_inject_num_injects(inject, &num_injects);
+
+const char** stubs = (const char**)calloc(num_injects, sizeof(char*));
+stubs[inject_idx] = stub;
+
+size_t out_size = 0;
+ptx_inject_render_ptx(inject, stubs, num_injects, NULL, 0, &out_size);
+
+char* out_buffer = (char*)malloc(out_size + 1);
+size_t bytes_written = 0;
+ptx_inject_render_ptx(inject, stubs, num_injects, out_buffer, out_size + 1, &bytes_written);
+
+free(out_buffer);
+free(stubs);
+ptx_inject_destroy(inject);
+```
+
+This would be equivalent to writing this CUDA kernel directly but without the CUDA to PTX compilation overhead:
+```c++
+extern "C"
+__global__
+void kernel(float* out) {
+    float x = 5.0f;
+    float y = 3.0f;
+    float z = 0.0f;
+    y = x + y;
+    z = x + y;
+    out[0] = z;
+}
+```
+
+## Stack PTX: stack-based instruction compiler
+If you do not want to hand-write PTX, you can use Stack PTX to generate the stub:
+```c
+#include <stack_ptx.h>
+#include <stack_ptx_default_info.h>
+// Generated from examples/type_descriptions/stack_ptx_descriptions.json
+#include "generated/stack_ptx_descriptions.h"
+
+enum { REG_X, REG_Y, REG_Z, REG_COUNT };
+
+static const StackPtxRegister registers[] = {
+    [REG_X] = { .name = "x", .stack_idx = STACK_PTX_STACK_TYPE_F32 },
+    [REG_Y] = { .name = "y", .stack_idx = STACK_PTX_STACK_TYPE_F32 },
+    [REG_Z] = { .name = "z", .stack_idx = STACK_PTX_STACK_TYPE_F32 },
+};
+
+static const StackPtxInstruction instructions[] = {
+    stack_ptx_encode_input(REG_X),
+    stack_ptx_encode_input(REG_Y),
+    stack_ptx_encode_ptx_instruction_add_ftz_f32,
+    stack_ptx_encode_input(REG_X),
+    stack_ptx_encode_ptx_instruction_add_ftz_f32,
+    stack_ptx_encode_return
+};
+
+static const size_t requests[] = { REG_Z };
+
+// Measure output size, allocate buffers, then compile.
+stack_ptx_compile(...);
+```
+
+This yields a PTX stub you can pass to `ptx_inject_render_ptx`. For a complete runnable example, see [examples/stack_ptx/00_simple/main.c](examples/stack_ptx/00_simple/main.c) and [examples/stack_ptx_inject/00_simple/main.c](examples/stack_ptx_inject/00_simple/main.c).
+
 ## Guides
 - Stack PTX guide: [STACK_PTX.md](STACK_PTX.md)
 - PTX Inject guide: [PTX_INJECT.md](PTX_INJECT.md)
