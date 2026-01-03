@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# SPDX-FileCopyrightText: 2025 MetaMachines LLC
+# SPDX-FileCopyrightText: 2026 MetaMachines LLC
 #
 # SPDX-License-Identifier: MIT
 
@@ -208,7 +208,7 @@ def _gen_c_header(
     append(
         "\n"
         "/*\n"
-        "* SPDX-FileCopyrightText: 2025 MetaMachines LLC\n"
+        "* SPDX-FileCopyrightText: 2026 MetaMachines LLC\n"
         "*\n"
         "* SPDX-License-Identifier: MIT\n"
         "*/\n\n"
@@ -430,7 +430,7 @@ def _gen_cpp_header(
     a(
         "\n"
         "/*\n"
-        "* SPDX-FileCopyrightText: 2025 MetaMachines LLC\n"
+        "* SPDX-FileCopyrightText: 2026 MetaMachines LLC\n"
         "*\n"
         "* SPDX-License-Identifier: MIT\n"
         "*/\n\n"
