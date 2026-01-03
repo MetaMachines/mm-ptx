@@ -41,6 +41,7 @@
 
 #define PTX_INJECT_VERSION (PTX_INJECT_VERSION_MAJOR * 10000 + PTX_INJECT_VERSION_MINOR * 100 + PTX_INJECT_VERSION_PATCH)
 
+#if !defined(__CUDACC_RTC__)
 
 #ifdef __cplusplus
 #define PTX_INJECT_PUBLIC_DEC extern "C"
@@ -1347,6 +1348,8 @@ ptx_inject_render_ptx(
 
 #endif // PTX_INJECT_IMPLEMENTATION_ONCE
 #endif // PTX_INJECT_IMPLEMENTATION
+
+#endif // !__CUDACC_RTC__
 
 /**
  * \brief CUDA-side helper macros for defining inject sites.
