@@ -109,21 +109,21 @@ If the inject site is duplicated by inlining or unrolling, the stable register n
 This repo includes several PTX Inject examples.
 
 ### 00_simple
-Path: `thirdparty/mm-ptx/examples/ptx_inject/00_simple`
+Path: `examples/ptx_inject/00_simple`
 
 - Uses a single inject site named `func`.
 - Queries stable register names and injects an `add.ftz.f32`.
 - Compiles the injected PTX to SASS and runs the kernel.
 
 ### 01_gemm
-Path: `thirdparty/mm-ptx/examples/ptx_inject/01_gemm`
+Path: `examples/ptx_inject/01_gemm`
 
 - Uses two inject sites: `mma` and `epilogue`.
 - Retrieves register names for each site and injects a fused multiply-add for the MMA path plus a move in the epilogue.
 - Demonstrates multiple stubs ordered by inject index.
 
 ### 02_custom_types
-Path: `thirdparty/mm-ptx/examples/ptx_inject/02_custom_types`
+Path: `examples/ptx_inject/02_custom_types`
 
 - Demonstrates custom type tokens. In `kernel.cu`:
 
