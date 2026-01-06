@@ -144,6 +144,13 @@ This yields a PTX stub you can pass to `ptx_inject_render_ptx`. For a complete r
 - **Evolutionary search / packed injects**
   - Demonstrate Map-Elites–style evolution of Stack PTX instruction sequences.
   - Pack hundreds or thousands of injection sites per kernel to amortize cuLoadModuleDataEx and launch overhead.
+- **In-The-Loop-Learning (ITLL) system**
+    - Closes the optimization loop: when kernel compilation takes microseconds and execution takes microseconds-to-milliseconds, your ML model must operate on the same time horizon or become the bottleneck.
+    - Training and inference on the order of microseconds per batch enables real-time kernel optimization—not batch processing overnight.
+    - Use cases: learned fitness predictors for evolutionary search, behavioral descriptors for MAP-Elites, online feature extraction from kernel executions, latent representations of kernel behavior.
+    - Built for small data (500-10,000 rows) with batch sizes in the tens of thousands.
+    - Custom allocator for perfect memory usage.
+    - Written in c99 with C++ RAII wrapper.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
