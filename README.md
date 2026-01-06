@@ -131,6 +131,20 @@ This yields a PTX stub you can pass to `ptx_inject_render_ptx`. For a complete r
 - Stack PTX + PTX Inject examples: [examples/stack_ptx_inject/README.md](examples/stack_ptx_inject/README.md)
 - PTX Inject example code: [examples/ptx_inject](examples/ptx_inject)
 
+## Roadmap
+- **OpenMP parallel compile**
+  - Demonstrate embarrassingly parallel CPU compilation with OpenMP.
+  - Show microsecond-scale Stack PTX stub generation and injection.
+  - Do PTX-to-cubin via the nvPTXCompiler static library (No blocking driver compilation).
+  - Single core is already up to 25x faster PTX-to-cubin than CUDA-to-cubin on the CuTe GEMM example. With this setup Multicore scales linearly.
+- **Networked compile workers**
+  - Send Stack PTX stubs over the network to Mac mini machines running Lima containers using nng.
+  - Leverage driver-free nvPTXCompiler to compile on low-cost ARM servers with no Nvidia hardware.
+  - Fixed-width 8-byte instruction format keeps payloads small after setup, and the cubin is the only returned artifact.
+- **Evolutionary search / packed injects**
+  - Demonstrate Map-Elites–style evolution of Stack PTX instruction sequences.
+  - Pack hundreds or thousands of injection sites per kernel to amortize cuLoadModuleDataEx and launch overhead.
+
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
