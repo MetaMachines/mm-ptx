@@ -152,6 +152,12 @@ This yields a PTX stub you can pass to `ptx_inject_render_ptx`. For a complete r
     - Custom allocator for perfect memory usage.
     - Written in c99 with C++ RAII wrapper.
 
+## Community & Support
+We're here to help with your projects and answer questions:
+- **Discord**: Join our community at https://discord.gg/7vS5XQ4bE4 for direct support, discussions, and collaboration.
+- **Twitter/X**: Follow [@_metamachines](https://x.com/_metamachines) for updates and announcements.
+- **Email**: Reach us at contact@metamachines.co
+
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
