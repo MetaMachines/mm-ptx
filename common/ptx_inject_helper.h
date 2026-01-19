@@ -14,7 +14,7 @@ static
 char *
 render_injected_ptx(
     PtxInjectHandle ptx_inject,
-    const char **ptx_stubs,
+    const char * const *ptx_stubs,
     size_t num_ptx_stubs,
     size_t *rendered_ptx_bytes_written_out
 ) {

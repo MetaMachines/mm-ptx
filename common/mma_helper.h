@@ -82,6 +82,28 @@ l2_gold(
 
 __attribute__((unused))
 static
+float
+matrix_max_abs_diff(
+    int M, int N,
+    const float* h_a, int lda,
+    const float* h_b, int ldb
+) {
+    float max_diff = 0.0f;
+    for (int row = 0; row < M; row++) {
+        for (int col = 0; col < N; col++) {
+            int a_idx = col * lda + row;
+            int b_idx = col * ldb + row;
+            float diff = fabsf(h_a[a_idx] - h_b[b_idx]);
+            if (diff > max_diff) {
+                max_diff = diff;
+            }
+        }
+    }
+    return max_diff;
+}
+
+__attribute__((unused))
+static
 void
 print_matrix(
     int M, int N,
