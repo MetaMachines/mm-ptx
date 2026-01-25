@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 class StackType:
     name: str
     literal_prefix: str
+    constant_type: Optional[str] = None
+    encoder_type: Optional[str] = None
 
 @dataclass(frozen=True)
 class ArgType:
@@ -84,12 +86,46 @@ def _unique_names(items: List[Any], attr: str, kind: str):
         _require(name not in seen, f"Duplicate {kind} name: {name}")
         seen.add(name)
 
+_CONSTANT_TYPE_INFO = {
+    "f32": ("f", "float"),
+    "s32": ("s", "int32_t"),
+    "u32": ("u", "uint32_t"),
+}
+
+def _normalize_constant_type(value: Any, stack_name: str) -> Optional[str]:
+    if value is None:
+        return None
+    _require(isinstance(value, str), f"Stack type '{stack_name}' has non-string constant_type: {value!r}")
+    normalized = value.strip().lower()
+    _require(normalized in _CONSTANT_TYPE_INFO,
+             f"Stack type '{stack_name}' has unsupported constant_type '{value}'")
+    return normalized
+
+def _normalize_encoder_type(value: Any, stack_name: str) -> Optional[str]:
+    if value is None:
+        return None
+    _require(isinstance(value, str), f"Stack type '{stack_name}' has non-string encoder_type: {value!r}")
+    normalized = value.strip()
+    _require(normalized, f"Stack type '{stack_name}' has empty encoder_type")
+    return normalized
+
 def _normalize_and_validate(raw: Dict[str, Any]) -> Spec:
     for key in ["abi_version", "stack_types", "arg_types", "instructions", "special_registers"]:
         _require(key in raw, f"Missing '{key}'")
 
     # stack types
-    stack_types = [StackType(st["name"], st["literal_prefix"]) for st in raw["stack_types"]]
+    stack_types = []
+    for st in raw["stack_types"]:
+        name = st["name"]
+        literal_prefix = st["literal_prefix"]
+        constant_type = _normalize_constant_type(st.get("constant_type"), name)
+        encoder_type = _normalize_encoder_type(st.get("encoder_type"), name)
+        stack_types.append(StackType(
+            name=name,
+            literal_prefix=literal_prefix,
+            constant_type=constant_type,
+            encoder_type=encoder_type
+        ))
     _require(len(stack_types) <= 32, f"Too many stack_types ({len(stack_types)} > 32)")
     _unique_names(stack_types, "name", "stack_type")
     stack_names = {st.name for st in stack_types}
@@ -163,15 +199,11 @@ def _to_ident_lower(s: str) -> str:
     # "add.u32" -> "add_u32"
     return ''.join([c.lower() if c.isalnum() else '_' for c in s])
 
-def _payload_field_for_stack(stack_name: str) -> Optional[str]:
-    # Heuristic: F* -> .f, S* -> .s, U* -> .u ; else None
-    if stack_name.upper().startswith('F'):
-        return 'f'
-    if stack_name.upper().startswith('S'):
-        return 's'
-    if stack_name.upper().startswith('U'):
-        return 'u'
-    return None
+def _payload_field_for_constant_type(constant_type: str) -> str:
+    return _CONSTANT_TYPE_INFO[constant_type][0]
+
+def _ctype_for_constant_type(constant_type: str) -> str:
+    return _CONSTANT_TYPE_INFO[constant_type][1]
 
 def _build_indices(spec: Dict[str, Any]):
     # name -> index mapping (ordered as provided)
@@ -332,11 +364,12 @@ def _gen_c_header(
         append(f"    [STACK_PTX_ARG_TYPE_{at['name']}] = {{ {st_idx}, {int(at['num_vec_elems'])} }},\n")
     append("};\n\n")
 
-    # Optional: constant encoders per stack type (heuristic)
+    # Optional: constant encoders per stack type (constant_type)
     for st in spec["stack_types"]:
-        field = _payload_field_for_stack(st["name"])
-        if not field:
+        constant_type = st.get("constant_type")
+        if not constant_type:
             continue
+        field = _payload_field_for_constant_type(constant_type)
         lname = _to_ident_lower(st["name"])
         append(f"#define stack_ptx_encode_constant_{lname}(c) {{ \\\n"
                f"    .instruction_type=STACK_PTX_INSTRUCTION_TYPE_CONSTANT, \\\n"
@@ -533,13 +566,14 @@ constexpr StackPtxInstruction _encode_special_register(
         a(f"    {{ static_cast<size_t>(StackType::{at['stack_type']}), {int(at['num_vec_elems'])} }},\n")
     a("};\n\n")
 
-    # constant encoders per stack type (heuristic)
+    # constant encoders per stack type (constant_type)
     for st in spec["stack_types"]:
-        field = _payload_field_for_stack(st["name"])
-        if not field:
+        constant_type = st.get("constant_type")
+        if not constant_type:
             continue
+        field = _payload_field_for_constant_type(constant_type)
         lname = _to_ident_lower(st["name"])
-        ctype = {"f": "float", "s": "int32_t", "u": "uint32_t"}[field]
+        ctype = _ctype_for_constant_type(constant_type)
         a(f"constexpr StackPtxInstruction encode_constant_{lname}({ctype} c) {{\n"
           f"    StackPtxInstruction instruction{{}};\n"
           f"    instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_CONSTANT;\n"
