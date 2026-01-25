@@ -18,63 +18,53 @@ extern "C"
 __global__
 void
 kernel(
-    unsigned int* out
+    float* out
 ) {
-    unsigned int x = 0;
-    unsigned int y = 0;
-    unsigned int z = 0;
-    unsigned int w = 0;
+    float x = 0;
+    float y = 0;
+    float z = 0;
+    float w = 0;
 
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     curandStatePhilox4_32_10_t state = philox_init(0,1234,tid);
 
-    uint4 output;
+    float4 output;
 
-    output = philox_curand4(&state);
-    output = philox_curand4(&state);
+    output = philox_curand_uniform4(&state);
+    output = philox_curand_uniform4(&state);
     state.ctr.x = 0;
 
     PTX_INJECT("func",
         PTX_PHILOX(state),
-        PTX_OUT (U32, x, x),
-        PTX_OUT (U32, y, y),
-        PTX_OUT (U32, z, z),
-        PTX_OUT (U32, w, w)
+        PTX_OUT (F32, x, x),
+        PTX_OUT (F32, y, y),
+        PTX_OUT (F32, z, z),
+        PTX_OUT (F32, w, w)
     );
 
     printf("%u\n", state.ctr.x);
-    printf("%u\n", x);
-    printf("%u\n", y);
-    printf("%u\n", z);
-    printf("%u\n", w);
+    printf("%f:%f\n", x, output.x);
+    printf("%f:%f\n", y, output.y);
+    printf("%f:%f\n", z, output.z);
+    printf("%f:%f\n", w, output.w);
 
-    printf("%u\n", output.x);
-    printf("%u\n", output.y);
-    printf("%u\n", output.z);
-    printf("%u\n", output.w);
-
-    output = philox_curand4(&state);
-    output = philox_curand4(&state);
+    output = philox_curand_uniform4(&state);
+    output = philox_curand_uniform4(&state);
     state.ctr.x = 2;
 
     PTX_INJECT("func",
         PTX_PHILOX(state),
-        PTX_OUT (U32, x, x),
-        PTX_OUT (U32, y, y),
-        PTX_OUT (U32, z, z),
-        PTX_OUT (U32, w, w)
+        PTX_OUT (F32, x, x),
+        PTX_OUT (F32, y, y),
+        PTX_OUT (F32, z, z),
+        PTX_OUT (F32, w, w)
     );
 
     printf("%u\n", state.ctr.x);
-    printf("%u\n", x);
-    printf("%u\n", y);
-    printf("%u\n", z);
-    printf("%u\n", w);
-
-    printf("%u\n", output.x);
-    printf("%u\n", output.y);
-    printf("%u\n", output.z);
-    printf("%u\n", output.w);
+    printf("%f:%f\n", x, output.x);
+    printf("%f:%f\n", y, output.y);
+    printf("%f:%f\n", z, output.z);
+    printf("%f:%f\n", w, output.w);
 
     *out = z;
 }

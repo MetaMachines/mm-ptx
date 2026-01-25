@@ -34,6 +34,10 @@ INCTXT(annotated_ptx, PTX_KERNEL);
 #define PHILOX_M4x32_0 (0xD2511F53)
 #define PHILOX_M4x32_1 (0xCD9E8D57)
 
+#define CURAND_2POW32_INV (2.3283064e-10f)
+#define CURAND_2POW32_INV_HALF (2.3283064e-10f/2.0f)
+#define CURAND_2POW32_INV_2PI (2.3283064e-10f * 6.2831855f)
+
 static const int execution_limit = 100000;
 
 #define PHILOX_REGISTER_DECL    \
@@ -65,13 +69,7 @@ typedef enum {
     MUT_CTR_X_IDX = 18,
     MUT_CTR_Y_IDX = 19,
     MUT_CTR_Z_IDX = 20,
-    MUT_CTR_W_IDX = 21,
-    SWAP_KEY_X_IDX = 22,
-    SWAP_KEY_Y_IDX = 23,
-    SWAP_CTR_X_IDX = 24,
-    SWAP_CTR_Y_IDX = 25,
-    SWAP_CTR_Z_IDX = 26,
-    SWAP_CTR_W_IDX = 27,
+    MUT_CTR_W_IDX = 21
 } PhiloxIDX;
 
 enum Register {
@@ -85,16 +83,18 @@ enum Register {
 
 static StackPtxRegister registers[] = {
     PHILOX_REGISTER_IMPL,
-    [REGISTER_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_U32},
-    [REGISTER_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_U32},
-    [REGISTER_Z] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_U32},
-    [REGISTER_W] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_U32},
+    [REGISTER_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
+    [REGISTER_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
+    [REGISTER_Z] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
+    [REGISTER_W] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_F32},
 };
 static const size_t num_registers = REGISTER_NUM_ENUMS;
 
 enum RoutineIdx {
     ROUTINE_PHILOX_PUSH_STATE,
     ROUTINE_PHILOX_CURAND,
+    ROUTINE_PHILOX_CURAND_UNIFORM,
+    ROUTINE_PHILOX_UNIFORM_SCALE,
     ROUTINE_PHILOX_ROUND,
     NUM_ROUTINES
 };
@@ -201,10 +201,30 @@ static const StackPtxInstruction* philox_routines[] = {
         stack_ptx_encode_ptx_instruction_add_philox,
         stack_ptx_encode_return
     },
+    [ROUTINE_PHILOX_CURAND_UNIFORM] = (StackPtxInstruction[]){
+        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND),
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
+        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
+        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
+        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
+        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+        stack_ptx_encode_return
+    }
 };
 
 static
-unsigned int
+float
 run_stack_ptx_instructions(
     int device_compute_capability_major,
     int device_compute_capability_minor,
@@ -324,8 +344,8 @@ run_stack_ptx_instructions(
     cuCheck( cuCtxSynchronize() );
     cuCheck( cuModuleUnload(cu_module) );
 
-    unsigned int h_out;
-    cuCheck( cuMemcpyDtoH(&h_out, d_out, sizeof(unsigned int)) );
+    float h_out;
+    cuCheck( cuMemcpyDtoH(&h_out, d_out, sizeof(float)) );
 
     return h_out;
 }
@@ -401,8 +421,8 @@ main() {
 
     static const StackPtxInstruction add_inputs[] = {
         stack_ptx_encode_routine(ROUTINE_PHILOX_PUSH_STATE),
-        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND),
-        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND_UNIFORM),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND_UNIFORM),
         stack_ptx_encode_return
     };
 
