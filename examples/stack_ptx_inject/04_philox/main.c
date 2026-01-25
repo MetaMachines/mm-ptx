@@ -29,47 +29,45 @@
 */
 INCTXT(annotated_ptx, PTX_KERNEL);
 
-#define PHILOX_W32_0   (0x9E3779B9)
-#define PHILOX_W32_1   (0xBB67AE85)
-#define PHILOX_M4x32_0 (0xD2511F53)
-#define PHILOX_M4x32_1 (0xCD9E8D57)
+#define PHILOX_W32_0                (0x9E3779B9)
+#define PHILOX_W32_1                (0xBB67AE85)
+#define PHILOX_M4x32_0              (0xD2511F53)
+#define PHILOX_M4x32_1              (0xCD9E8D57)
 
-#define CURAND_2POW32_INV (2.3283064e-10f)
-#define CURAND_2POW32_INV_HALF (2.3283064e-10f/2.0f)
-#define CURAND_2POW32_INV_2PI (2.3283064e-10f * 6.2831855f)
+#define CURAND_2POW32_INV           (2.3283064e-10f)
+#define CURAND_2POW32_INV_HALF      (2.3283064e-10f/2.0f)
+#define CURAND_2POW32_INV_2PI       (2.3283064e-10f * 6.2831855f)
+#define CURAND_2POW32_INV_2PI_HALF  ((2.3283064e-10f * 6.2831855f)/2.0f)
+
+#define PTX_LN2                     (0x1.62e43p-1f)
 
 static const int execution_limit = 100000;
 
 #define PHILOX_REGISTER_DECL    \
-    REGISTER_R_KEY_X,           \
-    REGISTER_R_KEY_Y,           \
-    REGISTER_R_CTR_X,           \
-    REGISTER_R_CTR_Y,           \
-    REGISTER_R_CTR_Z,           \
-    REGISTER_R_CTR_W
+    REGISTER_PHILOX_KEY_X,      \
+    REGISTER_PHILOX_KEY_Y,      \
+    REGISTER_PHILOX_CTR_X,      \
+    REGISTER_PHILOX_CTR_Y,      \
+    REGISTER_PHILOX_CTR_Z,      \
+    REGISTER_PHILOX_CTR_W
 
-#define PHILOX_REGISTER_IMPL                                                        \
-    [REGISTER_R_KEY_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX},  \
-    [REGISTER_R_KEY_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX},  \
-    [REGISTER_R_CTR_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX},  \
-    [REGISTER_R_CTR_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX},  \
-    [REGISTER_R_CTR_Z] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX},  \
-    [REGISTER_R_CTR_W] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX}
+#define PHILOX_REGISTER_IMPL                                                            \
+    [REGISTER_PHILOX_KEY_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX}, \
+    [REGISTER_PHILOX_KEY_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX}, \
+    [REGISTER_PHILOX_CTR_X] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX}, \
+    [REGISTER_PHILOX_CTR_Y] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX}, \
+    [REGISTER_PHILOX_CTR_Z] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX}, \
+    [REGISTER_PHILOX_CTR_W] = {.name = NULL, .stack_idx = STACK_PTX_STACK_TYPE_PHILOX}
 
+#define PHILOX_REQUEST_IMPL REGISTER_PHILOX_CTR_X
 
 typedef enum {
-    ORIG_KEY_X_IDX = 10,
-    ORIG_KEY_Y_IDX = 11,
-    ORIG_CTR_X_IDX = 12,
-    ORIG_CTR_Y_IDX = 13,
-    ORIG_CTR_Z_IDX = 14,
-    ORIG_CTR_W_IDX = 15,
-    MUT_KEY_X_IDX = 16,
-    MUT_KEY_Y_IDX = 17,
-    MUT_CTR_X_IDX = 18,
-    MUT_CTR_Y_IDX = 19,
-    MUT_CTR_Z_IDX = 20,
-    MUT_CTR_W_IDX = 21
+    KEY_X_IDX = 10,
+    KEY_Y_IDX = 11,
+    CTR_X_IDX = 12,
+    CTR_Y_IDX = 13,
+    CTR_Z_IDX = 14,
+    CTR_W_IDX = 15,
 } PhiloxIDX;
 
 enum Register {
@@ -94,82 +92,140 @@ enum RoutineIdx {
     ROUTINE_PHILOX_PUSH_STATE,
     ROUTINE_PHILOX_CURAND,
     ROUTINE_PHILOX_CURAND_UNIFORM,
+    ROUTINE_PHILOX_CURAND_NORMAL,
     ROUTINE_PHILOX_UNIFORM_SCALE,
+    ROUTINE_PHILOX_BOX_MULLER,
     ROUTINE_PHILOX_ROUND,
     NUM_ROUTINES
 };
 
 static const StackPtxInstruction* philox_routines[] = {
     [ROUTINE_PHILOX_PUSH_STATE] = (StackPtxInstruction[]){
-        stack_ptx_encode_input(REGISTER_R_KEY_Y),
-        stack_ptx_encode_input(REGISTER_R_KEY_X),
-        stack_ptx_encode_input(REGISTER_R_CTR_W),
-        stack_ptx_encode_input(REGISTER_R_CTR_Z),
-        stack_ptx_encode_input(REGISTER_R_CTR_Y),
-        stack_ptx_encode_input(REGISTER_R_CTR_X),
+        stack_ptx_encode_input(REGISTER_PHILOX_KEY_Y),
+        stack_ptx_encode_input(REGISTER_PHILOX_KEY_X),
+        stack_ptx_encode_input(REGISTER_PHILOX_CTR_W),
+        stack_ptx_encode_input(REGISTER_PHILOX_CTR_Z),
+        stack_ptx_encode_input(REGISTER_PHILOX_CTR_Y),
+        stack_ptx_encode_input(REGISTER_PHILOX_CTR_X),
         stack_ptx_encode_return
     },
     [ROUTINE_PHILOX_ROUND] = (StackPtxInstruction[]) {
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, MUT_CTR_X_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, MUT_CTR_Y_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, MUT_CTR_Z_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, MUT_CTR_W_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, MUT_KEY_X_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, MUT_KEY_Y_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_X_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_Y_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_Z_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_W_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, KEY_X_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, KEY_Y_IDX),
 
         // key_y
-        stack_ptx_encode_load(MUT_KEY_Y_IDX),
+        stack_ptx_encode_load(KEY_Y_IDX),
         stack_ptx_encode_constant_philox(PHILOX_W32_1),
         stack_ptx_encode_ptx_instruction_add_philox,
 
         // key_x
-        stack_ptx_encode_load(MUT_KEY_X_IDX),
+        stack_ptx_encode_load(KEY_X_IDX),
         stack_ptx_encode_constant_philox(PHILOX_W32_0),
         stack_ptx_encode_ptx_instruction_add_philox,
 
         // ctr_w
-        stack_ptx_encode_load(MUT_CTR_X_IDX),
+        stack_ptx_encode_load(CTR_X_IDX),
         stack_ptx_encode_constant_philox(PHILOX_M4x32_0),
         stack_ptx_encode_ptx_instruction_mul_lo_philox,
 
         // ctr_z
-        stack_ptx_encode_load(MUT_CTR_X_IDX),
+        stack_ptx_encode_load(CTR_X_IDX),
         stack_ptx_encode_constant_philox(PHILOX_M4x32_0),
         stack_ptx_encode_ptx_instruction_mul_hi_philox,
-        stack_ptx_encode_load(MUT_CTR_W_IDX),
+        stack_ptx_encode_load(CTR_W_IDX),
         stack_ptx_encode_ptx_instruction_xor_philox,
-        stack_ptx_encode_load(MUT_KEY_Y_IDX),
+        stack_ptx_encode_load(KEY_Y_IDX),
         stack_ptx_encode_ptx_instruction_xor_philox,
 
         // ctr_y
-        stack_ptx_encode_load(MUT_CTR_Z_IDX),
+        stack_ptx_encode_load(CTR_Z_IDX),
         stack_ptx_encode_constant_philox(PHILOX_M4x32_1),
         stack_ptx_encode_ptx_instruction_mul_lo_philox,
 
         // ctr_x
-        stack_ptx_encode_load(MUT_CTR_Z_IDX),
+        stack_ptx_encode_load(CTR_Z_IDX),
         stack_ptx_encode_constant_philox(PHILOX_M4x32_1),
         stack_ptx_encode_ptx_instruction_mul_hi_philox,
-        stack_ptx_encode_load(MUT_CTR_Y_IDX),
+        stack_ptx_encode_load(CTR_Y_IDX),
         stack_ptx_encode_ptx_instruction_xor_philox,
-        stack_ptx_encode_load(MUT_KEY_X_IDX),
+        stack_ptx_encode_load(KEY_X_IDX),
         stack_ptx_encode_ptx_instruction_xor_philox,
         stack_ptx_encode_return
     },
-    [ROUTINE_PHILOX_CURAND] = (StackPtxInstruction[]){
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, ORIG_CTR_X_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, ORIG_CTR_Y_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, ORIG_CTR_Z_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, ORIG_CTR_W_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, ORIG_KEY_X_IDX),
-        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, ORIG_KEY_Y_IDX),
+    [ROUTINE_PHILOX_UNIFORM_SCALE] = (StackPtxInstruction[]){
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
+        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+        stack_ptx_encode_return
+    },
+    [ROUTINE_PHILOX_BOX_MULLER] = (StackPtxInstruction[]){
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
+        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
 
-        stack_ptx_encode_load(ORIG_KEY_Y_IDX),
-        stack_ptx_encode_load(ORIG_KEY_X_IDX),
-        stack_ptx_encode_load(ORIG_CTR_W_IDX),
-        stack_ptx_encode_load(ORIG_CTR_Z_IDX),
-        stack_ptx_encode_load(ORIG_CTR_Y_IDX),
-        stack_ptx_encode_load(ORIG_CTR_X_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_F32, 10),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_F32, 11),
+
+        // u = x * CURAND_2POW32_INV + (CURAND_2POW32_INV/2);
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
+        stack_ptx_encode_load(10),
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
+        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+
+        // s = sqrtf(-2.0f * logf(u));
+        stack_ptx_encode_ptx_instruction_lg2_approx_ftz_f32,
+        stack_ptx_encode_constant_f32(PTX_LN2),
+        stack_ptx_encode_ptx_instruction_mul_ftz_f32,
+        stack_ptx_encode_constant_f32(-2.0f),
+        stack_ptx_encode_ptx_instruction_mul_ftz_f32,
+        stack_ptx_encode_ptx_instruction_sqrt_approx_ftz_f32,
+
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_F32, 10), 
+
+        // v = y * CURAND_2POW32_INV_2PI + (CURAND_2POW32_INV_2PI/2);
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_2PI_HALF),
+        stack_ptx_encode_load(11),
+        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_2PI),
+        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_F32, 11),
+
+        stack_ptx_encode_load(11),
+        stack_ptx_encode_ptx_instruction_cos_approx_ftz_f32,
+        stack_ptx_encode_load(10),
+        stack_ptx_encode_ptx_instruction_mul_ftz_f32,
+
+        stack_ptx_encode_load(11),
+        stack_ptx_encode_ptx_instruction_sin_approx_ftz_f32,
+        stack_ptx_encode_load(10),
+        stack_ptx_encode_ptx_instruction_mul_ftz_f32,
+
+        stack_ptx_encode_return
+    }, 
+    [ROUTINE_PHILOX_CURAND] = (StackPtxInstruction[]){
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_X_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_Y_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_Z_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, CTR_W_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, KEY_X_IDX),
+        stack_ptx_encode_store(STACK_PTX_STACK_TYPE_PHILOX, KEY_Y_IDX),
+
+        stack_ptx_encode_load(KEY_Y_IDX),
+        stack_ptx_encode_load(KEY_X_IDX),
+        stack_ptx_encode_load(CTR_W_IDX),
+        stack_ptx_encode_load(CTR_Z_IDX),
+        stack_ptx_encode_load(CTR_Y_IDX),
+        stack_ptx_encode_load(CTR_X_IDX),
+
+        stack_ptx_encode_load(KEY_Y_IDX),
+        stack_ptx_encode_load(KEY_X_IDX),
+        stack_ptx_encode_load(CTR_W_IDX),
+        stack_ptx_encode_load(CTR_Z_IDX),
+        stack_ptx_encode_load(CTR_Y_IDX),
+        stack_ptx_encode_load(CTR_X_IDX),
 
         stack_ptx_encode_routine(ROUTINE_PHILOX_ROUND),
         stack_ptx_encode_routine(ROUTINE_PHILOX_ROUND),
@@ -190,35 +246,22 @@ static const StackPtxInstruction* philox_routines[] = {
         stack_ptx_encode_meta_constant(2),
         stack_ptx_encode_meta_drop(STACK_PTX_STACK_TYPE_PHILOX),
 
-        stack_ptx_encode_load(ORIG_KEY_Y_IDX),
-        stack_ptx_encode_load(ORIG_KEY_X_IDX),
-        stack_ptx_encode_load(ORIG_CTR_W_IDX),
-        stack_ptx_encode_load(ORIG_CTR_Z_IDX),
-        stack_ptx_encode_load(ORIG_CTR_Y_IDX),
-        stack_ptx_encode_load(ORIG_CTR_X_IDX),
-
         stack_ptx_encode_constant_philox(1),
         stack_ptx_encode_ptx_instruction_add_philox,
         stack_ptx_encode_return
     },
     [ROUTINE_PHILOX_CURAND_UNIFORM] = (StackPtxInstruction[]){
         stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND),
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
-        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
-        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
-        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
-        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
-        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
-        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV_HALF),
-        stack_ptx_encode_ptx_instruction_cvt_rn_f32_u32,
-        stack_ptx_encode_constant_f32(CURAND_2POW32_INV),
-        stack_ptx_encode_ptx_instruction_fma_rn_ftz_f32,
+        stack_ptx_encode_routine(ROUTINE_PHILOX_UNIFORM_SCALE),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_UNIFORM_SCALE),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_UNIFORM_SCALE),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_UNIFORM_SCALE),
+        stack_ptx_encode_return
+    },
+    [ROUTINE_PHILOX_CURAND_NORMAL] = (StackPtxInstruction[]){
+        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_BOX_MULLER),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_BOX_MULLER),
         stack_ptx_encode_return
     }
 };
@@ -358,22 +401,22 @@ ptx_inject_philox_populate_registers(
     StackPtxRegister* registers
 ) {
     PtxInjectResult result;
-    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_key_x", NULL, &registers[REGISTER_R_KEY_X].name, NULL, NULL, NULL);
+    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_key_x", NULL, &registers[REGISTER_PHILOX_KEY_X].name, NULL, NULL, NULL);
     if (result != PTX_INJECT_SUCCESS) return result;
 
-    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_key_y", NULL, &registers[REGISTER_R_KEY_Y].name, NULL, NULL, NULL);
+    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_key_y", NULL, &registers[REGISTER_PHILOX_KEY_Y].name, NULL, NULL, NULL);
     if (result != PTX_INJECT_SUCCESS) return result;
 
-    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_x", NULL, &registers[REGISTER_R_CTR_X].name, NULL, NULL, NULL);
+    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_x", NULL, &registers[REGISTER_PHILOX_CTR_X].name, NULL, NULL, NULL);
     if (result != PTX_INJECT_SUCCESS) return result;
 
-    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_y", NULL, &registers[REGISTER_R_CTR_Y].name, NULL, NULL, NULL);
+    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_y", NULL, &registers[REGISTER_PHILOX_CTR_Y].name, NULL, NULL, NULL);
     if (result != PTX_INJECT_SUCCESS) return result;
 
-    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_z", NULL, &registers[REGISTER_R_CTR_Z].name, NULL, NULL, NULL);
+    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_z", NULL, &registers[REGISTER_PHILOX_CTR_Z].name, NULL, NULL, NULL);
     if (result != PTX_INJECT_SUCCESS) return result;
 
-    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_w", NULL, &registers[REGISTER_R_CTR_W].name, NULL, NULL, NULL);
+    result = ptx_inject_variable_info_by_name(ptx_inject, inject_func_idx, "philox_ctr_w", NULL, &registers[REGISTER_PHILOX_CTR_W].name, NULL, NULL, NULL);
     if (result != PTX_INJECT_SUCCESS) return result;
 
     return result;
@@ -415,14 +458,15 @@ main() {
     void* stack_ptx_workspace = malloc(stack_ptx_workspace_size);
 
     static const size_t requests[] = {
-        REGISTER_X, REGISTER_Y, REGISTER_Z, REGISTER_W, REGISTER_R_CTR_X
+        PHILOX_REQUEST_IMPL,
+        REGISTER_X, REGISTER_Y, REGISTER_Z, REGISTER_W
     };
     static const size_t num_requests = STACK_PTX_ARRAY_NUM_ELEMS(requests);
 
-    static const StackPtxInstruction add_inputs[] = {
+    static const StackPtxInstruction philox_inputs[] = {
         stack_ptx_encode_routine(ROUTINE_PHILOX_PUSH_STATE),
-        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND_UNIFORM),
-        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND_UNIFORM),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND_NORMAL),
+        stack_ptx_encode_routine(ROUTINE_PHILOX_CURAND_NORMAL),
         stack_ptx_encode_return
     };
 
@@ -444,7 +488,7 @@ main() {
     CUdeviceptr d_out;
     cuCheck( cuMemAlloc(&d_out, sizeof(float)) );
 
-    printf("Inject (add_inputs) PTX\n");
+    printf("Inject (philox_inputs) PTX\n");
 
     unsigned int add_result = 
         run_stack_ptx_instructions(
@@ -455,7 +499,7 @@ main() {
             registers, num_registers,
             requests,
             num_requests,
-            add_inputs,
+            philox_inputs,
             stack_ptx_workspace,
             stack_ptx_workspace_size
         );
@@ -467,5 +511,5 @@ main() {
 
     ptxInjectCheck( ptx_inject_destroy(ptx_inject) );
 
-    printf("Inject (add_inputs) result (should be 8):\t%u\n", add_result);
+    printf("Inject (philox_inputs) result (should be 8):\t%u\n", add_result);
 }

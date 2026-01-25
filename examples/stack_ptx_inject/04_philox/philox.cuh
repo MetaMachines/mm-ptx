@@ -73,16 +73,13 @@ _curand_box_muller(
     unsigned int x, 
     unsigned int y
 ) {
-    float2 result;
     float u = x * CURAND_2POW32_INV + (CURAND_2POW32_INV/2);
     float v = y * CURAND_2POW32_INV_2PI + (CURAND_2POW32_INV_2PI/2);
-    float s;
-
-    s = sqrtf(-2.0f * logf(u));
-    __sincosf(v, &result.x, &result.y);
-
-    result.x *= s;
-    result.y *= s;
+    float s = sqrtf(-2.0f * logf(u));
+    
+    float2 result;
+    result.x = __sinf(v) * s;
+    result.y = __cosf(v) * s;
     return result;
 }
 

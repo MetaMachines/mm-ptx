@@ -75,7 +75,7 @@
 
     { "ptx": "add.u32",             "args": ["PHILOX","PHILOX"],    "rets": ["PHILOX"], "display": "add.philox"     },
     { "ptx": "xor.b32",             "args": ["PHILOX", "PHILOX"],   "rets": ["PHILOX"], "display": "xor.philox"     },
-    { "ptx": "mov.b32",             "args": ["PHILOX"],             "rets": ["U32"], "display": "mov.philox"     },
+    { "ptx": "mov.b32",             "args": ["PHILOX"],             "rets": ["U32"],    "display": "mov.philox"     },
     { "ptx": "mul.lo.u32",          "args": ["PHILOX", "PHILOX"],   "rets": ["PHILOX"], "display": "mul.lo.philox"  },
     { "ptx": "mul.hi.u32",          "args": ["PHILOX", "PHILOX"],   "rets": ["PHILOX"], "display": "mul.hi.philox"  }
   ],

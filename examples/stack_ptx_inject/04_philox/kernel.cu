@@ -30,8 +30,8 @@ kernel(
 
     float4 output;
 
-    output = philox_curand_uniform4(&state);
-    output = philox_curand_uniform4(&state);
+    output = philox_curand_normal4(&state);
+    output = philox_curand_normal4(&state);
     state.ctr.x = 0;
 
     PTX_INJECT("func",
@@ -48,8 +48,8 @@ kernel(
     printf("%f:%f\n", z, output.z);
     printf("%f:%f\n", w, output.w);
 
-    output = philox_curand_uniform4(&state);
-    output = philox_curand_uniform4(&state);
+    output = philox_curand_normal4(&state);
+    output = philox_curand_normal4(&state);
     state.ctr.x = 2;
 
     PTX_INJECT("func",
