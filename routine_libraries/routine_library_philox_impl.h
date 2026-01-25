@@ -108,9 +108,7 @@ static const StackPtxInstruction routine_library_philox_box_muller[] = {
 
     // s = sqrtf(-2.0f * logf(u));
     stack_ptx_encode_ptx_instruction_lg2_approx_ftz_f32,
-    stack_ptx_encode_constant_f32(PTX_LN2),
-    stack_ptx_encode_ptx_instruction_mul_ftz_f32,
-    stack_ptx_encode_constant_f32(-2.0f),
+    stack_ptx_encode_constant_f32(PTX_LN2 * (-2.0f)),
     stack_ptx_encode_ptx_instruction_mul_ftz_f32,
     stack_ptx_encode_ptx_instruction_sqrt_approx_ftz_f32,
 

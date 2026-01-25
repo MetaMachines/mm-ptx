@@ -26,14 +26,8 @@ kernel(
 ) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-    curandStatePhilox4_32_10_t state_u32 = philox_init(0, 1234, tid);
-    curandStatePhilox4_32_10_t state_u32_native = state_u32;
-
-    curandStatePhilox4_32_10_t state_uniform = philox_init(1, 1234, tid);
-    curandStatePhilox4_32_10_t state_uniform_native = state_uniform;
-
-    curandStatePhilox4_32_10_t state_normal = philox_init(2, 1234, tid);
-    curandStatePhilox4_32_10_t state_normal_native = state_normal;
+    curandStatePhilox4_32_10_t state = philox_init(0, 1234, tid);
+    curandStatePhilox4_32_10_t state_native = state;
 
     uint32_t u32_x = 0;
     uint32_t u32_y = 0;
@@ -53,14 +47,14 @@ kernel(
     for (int i = 0; i < 2; ++i) {
         int base = i * 4;
 
-        uint4 native_u32 = philox_curand4(&state_u32_native);
+        uint4 native_u32 = philox_curand4(&state_native);
         ref_u32[base + 0] = native_u32.x;
         ref_u32[base + 1] = native_u32.y;
         ref_u32[base + 2] = native_u32.z;
         ref_u32[base + 3] = native_u32.w;
 
         PTX_INJECT("philox_u32",
-            PTX_PHILOX(state_u32),
+            PTX_PHILOX(state),
             PTX_OUT(U32, u32_x, u32_x),
             PTX_OUT(U32, u32_y, u32_y),
             PTX_OUT(U32, u32_z, u32_z),
@@ -72,14 +66,14 @@ kernel(
         out_u32[base + 2] = u32_z;
         out_u32[base + 3] = u32_w;
 
-        float4 native_uniform = philox_curand_uniform4(&state_uniform_native);
+        float4 native_uniform = philox_curand_uniform4(&state_native);
         ref_uniform[base + 0] = native_uniform.x;
         ref_uniform[base + 1] = native_uniform.y;
         ref_uniform[base + 2] = native_uniform.z;
         ref_uniform[base + 3] = native_uniform.w;
 
         PTX_INJECT("philox_uniform",
-            PTX_PHILOX(state_uniform),
+            PTX_PHILOX(state),
             PTX_OUT(F32, uniform_x, uniform_x),
             PTX_OUT(F32, uniform_y, uniform_y),
             PTX_OUT(F32, uniform_z, uniform_z),
@@ -91,14 +85,14 @@ kernel(
         out_uniform[base + 2] = uniform_z;
         out_uniform[base + 3] = uniform_w;
 
-        float4 native_normal = philox_curand_normal4(&state_normal_native);
+        float4 native_normal = philox_curand_normal4(&state_native);
         ref_normal[base + 0] = native_normal.x;
         ref_normal[base + 1] = native_normal.y;
         ref_normal[base + 2] = native_normal.z;
         ref_normal[base + 3] = native_normal.w;
 
         PTX_INJECT("philox_normal",
-            PTX_PHILOX(state_normal),
+            PTX_PHILOX(state),
             PTX_OUT(F32, normal_x, normal_x),
             PTX_OUT(F32, normal_y, normal_y),
             PTX_OUT(F32, normal_z, normal_z),

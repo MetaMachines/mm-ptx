@@ -59,6 +59,12 @@ An example of running a mma.sync f32 tf32 instruction. Shows using convert instr
 ## 04_half_type
 An example of running both f16 and f16x2 types. Shows using the f16x2 as a datatype and then representing it as a vector of 2 f16 types.
 
+## 04_philox
+An example that injects a philox PRNG routine library and compares output against native curand calls.
+
+## 05_philox_cpp
+A C++ version of the philox stack_ptx_inject example using the C++ routine library header.
+
 ## 05_bulk_rand_simple_packed
 
 This example will duplicate the contents of kernel.cu into a new kernel CUDA file 128 times, adjusting the global function name and inject site name by its index. This seems to be the best way to pack multiple kernels in to one PTX source. Simple PTX code can be duplicated but this gets tricky if the PTX file already has non-inlined device functions that will be duplicated also and cause compilation errors.
