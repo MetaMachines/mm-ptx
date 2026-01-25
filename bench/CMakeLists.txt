@@ -30,17 +30,17 @@ add_executable(mm_ptx_compile_bench
   ptx_compile_bench.c
 )
 
-target_include_directories(mm_ptx_compile_bench PRIVATE
-  "${CMAKE_CURRENT_SOURCE_DIR}/../common"
-)
-
 target_link_libraries(mm_ptx_compile_bench PRIVATE
-  CUDA::cuda_driver
   CUDA::nvrtc
   ${MM_PTX_BENCH_NVPTX_TARGET}
   m
   mm_ptx_headers
   stack_ptx_bench_generated
 )
+
+find_package(OpenMP QUIET)
+if(OpenMP_C_FOUND)
+  target_link_libraries(mm_ptx_compile_bench PRIVATE OpenMP::OpenMP_C)
+endif()
 
 target_compile_features(mm_ptx_compile_bench PRIVATE c_std_11)
