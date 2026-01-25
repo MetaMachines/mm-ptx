@@ -1,5 +1,5 @@
 #include <ptx_inject.h>
-#include "philox.cuh"
+#include <philox.cuh>
 
 #include <stdio.h>
 #include <stdint.h>

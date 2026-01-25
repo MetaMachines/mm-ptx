@@ -1,9 +1,13 @@
 
 set(MM_PTX_COMMON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../common")
+set(MM_PTX_ROUTINE_LIBRARIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../routine_libraries")
 set(MM_PTX_TESTS_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 add_library(mm_ptx_common INTERFACE)
-target_include_directories(mm_ptx_common INTERFACE "${MM_PTX_COMMON_DIR}")
+target_include_directories(mm_ptx_common INTERFACE
+    "${MM_PTX_COMMON_DIR}"
+    "${MM_PTX_ROUTINE_LIBRARIES_DIR}"
+)
 
 set(GENERATED_INC_DIR "${MM_PTX_TESTS_GENERATED_DIR}")
 set(STACK_PTX_DESCRIPTIONS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/stack_ptx_descriptions.json")
@@ -116,3 +120,50 @@ target_link_libraries(
 
 add_test(NAME mm_ptx.stack_ptx_inject_00_simple COMMAND stack_ptx_inject_00_simple_tests)
 set_tests_properties(mm_ptx.stack_ptx_inject_00_simple PROPERTIES SKIP_RETURN_CODE 77)
+
+set(STACK_PTX_PHILOX_KERNEL "${CMAKE_CURRENT_SOURCE_DIR}/stack_ptx_philox_kernel.cu")
+set(STACK_PTX_PHILOX_KERNEL_TARGET "mm_ptx_test_stack_ptx_inject_philox_kernel_ptx")
+
+add_library(${STACK_PTX_PHILOX_KERNEL_TARGET} OBJECT "${STACK_PTX_PHILOX_KERNEL}")
+target_link_libraries(${STACK_PTX_PHILOX_KERNEL_TARGET} PRIVATE mm_ptx_headers mm_ptx_common)
+set_target_properties(${STACK_PTX_PHILOX_KERNEL_TARGET} PROPERTIES
+    CUDA_PTX_COMPILATION ON
+    CUDA_ARCHITECTURES native
+)
+
+set(STACK_PTX_PHILOX_KERNEL_PTX "${MM_PTX_TESTS_GENERATED_DIR}/stack_ptx_philox_kernel.ptx")
+add_custom_command(
+    OUTPUT "${STACK_PTX_PHILOX_KERNEL_PTX}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${MM_PTX_TESTS_GENERATED_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_OBJECTS:${STACK_PTX_PHILOX_KERNEL_TARGET}>
+            "${STACK_PTX_PHILOX_KERNEL_PTX}"
+    DEPENDS ${STACK_PTX_PHILOX_KERNEL_TARGET}
+    COMMENT "Preparing PTX for stack_ptx_inject_philox_tests"
+    VERBATIM
+)
+add_custom_target(stack_ptx_philox_kernel_ptx_file DEPENDS "${STACK_PTX_PHILOX_KERNEL_PTX}")
+
+add_executable(stack_ptx_inject_philox_tests test_stack_ptx_inject_philox.c)
+add_dependencies(stack_ptx_inject_philox_tests stack_ptx_philox_kernel_ptx_file)
+set_source_files_properties(
+    test_stack_ptx_inject_philox.c
+    PROPERTIES
+    OBJECT_DEPENDS "${STACK_PTX_PHILOX_KERNEL_PTX}"
+)
+target_compile_definitions(stack_ptx_inject_philox_tests PRIVATE PTX_KERNEL="${STACK_PTX_PHILOX_KERNEL_PTX}")
+
+target_link_libraries(
+    stack_ptx_inject_philox_tests
+    PRIVATE
+    CUDA::cuda_driver
+    CUDA::nvrtc
+    CUDA::nvptxcompiler_static
+    m
+    mm_ptx_headers
+    mm_ptx_common
+    stack_ptx_test_generated
+)
+
+add_test(NAME mm_ptx.stack_ptx_inject_philox COMMAND stack_ptx_inject_philox_tests)
+set_tests_properties(mm_ptx.stack_ptx_inject_philox PROPERTIES SKIP_RETURN_CODE 77)
