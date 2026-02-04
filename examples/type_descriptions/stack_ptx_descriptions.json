@@ -9,7 +9,8 @@
     { "name": "TF32",   "literal_prefix": "b32"  },
     { "name": "F16",    "literal_prefix": "b16"  },
     { "name": "F16X2",  "literal_prefix": "b32"  },
-    { "name": "U8",     "literal_prefix": "u8"   }
+    { "name": "U8",     "literal_prefix": "u8"   },
+    { "name": "PHILOX", "literal_prefix": "u32", "constant_type": "u32", "encoder_type": "u32"}
   ],
 
   "arg_types": [
@@ -26,7 +27,8 @@
     { "name": "F16X2",    "stack_type": "F16X2"                     },
     { "name": "V2_F16",   "stack_type": "F16",  "num_vec_elems":2   },
     { "name": "U8",       "stack_type": "U8"                        },
-    { "name": "V4_U8",    "stack_type": "U8",   "num_vec_elems":4   }
+    { "name": "V4_U8",    "stack_type": "U8",   "num_vec_elems":4   },
+    { "name": "PHILOX",   "stack_type": "PHILOX"}
   ],
 
   "instructions": [
@@ -68,8 +70,14 @@
     { "ptx": "mov.b32",             "args": ["F16X2"],              "rets": ["V2_F16"], "display": "f16x2_to_v2_f16"},
     { "ptx": "cvt.f32.f16",         "args": ["F16"],                "rets": ["F32"],    "display": "f16_to_f32"},
 
-    { "ptx": "mov.b32",             "args": ["U32"],                "rets": ["V4_U8"],  "display":  "u32_to_v4_u8"},
-    { "ptx": "cvt.u32.u8",          "args": ["U8"],                 "rets": ["U32"]                               }
+    { "ptx": "mov.b32",             "args": ["U32"],                "rets": ["V4_U8"],  "display": "u32_to_v4_u8"},
+    { "ptx": "cvt.u32.u8",          "args": ["U8"],                 "rets": ["U32"]                              },
+
+    { "ptx": "add.u32",             "args": ["PHILOX","PHILOX"],    "rets": ["PHILOX"], "display": "add.philox"     },
+    { "ptx": "xor.b32",             "args": ["PHILOX", "PHILOX"],   "rets": ["PHILOX"], "display": "xor.philox"     },
+    { "ptx": "mov.b32",             "args": ["PHILOX"],             "rets": ["U32"],    "display": "mov.philox"     },
+    { "ptx": "mul.lo.u32",          "args": ["PHILOX", "PHILOX"],   "rets": ["PHILOX"], "display": "mul.lo.philox"  },
+    { "ptx": "mul.hi.u32",          "args": ["PHILOX", "PHILOX"],   "rets": ["PHILOX"], "display": "mul.hi.philox"  }
   ],
 
   "special_registers": [

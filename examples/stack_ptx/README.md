@@ -34,3 +34,6 @@ An example that shows the usage of the `store` and `load` Stack PTX Instructions
 
 ## 08_cpp
 An example using the stack_ptx_default_generated_types.hpp in c++
+
+## 09_routine_libraries_cpp
+An example that shows routine libraries in C++, mirroring the C routine library pattern.

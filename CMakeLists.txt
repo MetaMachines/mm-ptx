@@ -43,6 +43,14 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
+set(MMPTX_BUILD_BENCH_DEFAULT ON)
+option(MMPTX_BUILD_BENCH "Build mm-ptx benchmarks" ${MMPTX_BUILD_BENCH_DEFAULT})
+message(STATUS "MMPTX_BUILD_BENCH = ${MMPTX_BUILD_BENCH}")
+
+if(MMPTX_BUILD_BENCH)
+    add_subdirectory(bench)
+endif()
+
 set(MMPTX_BUILD_EXAMPLES_DEFAULT ON)
 option(MMPTX_BUILD_EXAMPLES "Build mm-ptx examples" ${MMPTX_BUILD_EXAMPLES_DEFAULT})
 message(STATUS "MMPTX_BUILD_EXAMPLES = ${MMPTX_BUILD_EXAMPLES}")
@@ -50,4 +58,3 @@ message(STATUS "MMPTX_BUILD_EXAMPLES = ${MMPTX_BUILD_EXAMPLES}")
 if(MMPTX_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
-
