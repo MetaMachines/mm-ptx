@@ -32,12 +32,12 @@
 
 #define PTX_INJECT_VERSION_MAJOR 1 //!< PTX Inject major version.
 #define PTX_INJECT_VERSION_MINOR 0 //!< PTX Inject minor version.
-#define PTX_INJECT_VERSION_PATCH 0 //!< PTX Inject patch version.
+#define PTX_INJECT_VERSION_PATCH 1 //!< PTX Inject patch version.
 
 /**
- * \brief String representation of the PTX Inject library version (e.g., "1.0.0").
+ * \brief String representation of the PTX Inject library version (e.g., "1.0.1").
  */
-#define PTX_INJECT_VERSION_STRING "1.0.0"
+#define PTX_INJECT_VERSION_STRING "1.0.1"
 
 #define PTX_INJECT_VERSION (PTX_INJECT_VERSION_MAJOR * 10000 + PTX_INJECT_VERSION_MINOR * 100 + PTX_INJECT_VERSION_PATCH)
 
@@ -1403,6 +1403,16 @@ ptx_inject_render_ptx(
     #define PTX_TYPE_INFO_F32         PTX_TYPES_DESC(f32, f32, f, ID)
     #define PTX_TYPE_INFO_B32         PTX_TYPES_DESC(b32, b32, r, ID)
 #endif
+
+#define PTX_TYPE_INFO_PHILOX PTX_TYPES_DESC(u32, u32, r, ID)
+
+#define PTX_PHILOX(state)                           \
+    PTX_IN (PHILOX, philox_key_x, state.key.x),     \
+    PTX_IN (PHILOX, philox_key_y, state.key.y),     \
+    PTX_MOD (PHILOX, philox_ctr_x, state.ctr.x),    \
+    PTX_IN (PHILOX, philox_ctr_y, state.ctr.y),     \
+    PTX_IN (PHILOX, philox_ctr_z, state.ctr.z),     \
+    PTX_IN (PHILOX, philox_ctr_w, state.ctr.w)
 
 // ---------- API consumed by the rest of this header ----------
 #define PTX_REGTYPE_STR(tok)    PTX_TYPES_STR(PTX_TYPES_T0(PTX_TYPES_INFO(tok)))

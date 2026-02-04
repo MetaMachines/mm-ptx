@@ -3,16 +3,6 @@
 
 #include <stdint.h>
 
-#define PTX_TYPE_INFO_PHILOX PTX_TYPES_DESC(u32, u32, r, ID)
-
-#define PTX_PHILOX(state)                           \
-    PTX_IN (PHILOX, philox_key_x, state.key.x),     \
-    PTX_IN (PHILOX, philox_key_y, state.key.y),     \
-    PTX_MOD(PHILOX, philox_ctr_x, state.ctr.x),     \
-    PTX_IN (PHILOX, philox_ctr_y, state.ctr.y),     \
-    PTX_IN (PHILOX, philox_ctr_z, state.ctr.z),     \
-    PTX_IN (PHILOX, philox_ctr_w, state.ctr.w)
-
 extern "C"
 __global__
 void

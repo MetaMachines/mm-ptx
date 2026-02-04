@@ -273,6 +273,4 @@ main() {
     free(stack_ptx_workspace);
 
     ptxInjectCheck( ptx_inject_destroy(ptx_inject) );
-
-    printf("Inject (philox_inputs) result (should be 8):\t%u\n", add_result);
 }
