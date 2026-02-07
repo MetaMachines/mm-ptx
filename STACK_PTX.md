@@ -171,6 +171,10 @@ stack_ptx_encode_meta_replace(STACK_PTX_STACK_TYPE_U32)
 ```c
 stack_ptx_encode_meta_drop(STACK_PTX_STACK_TYPE_U32)
 ```
+- Meta `clear`: clears all values from the relevant stack.
+```c
+stack_ptx_encode_meta_clear(STACK_PTX_STACK_TYPE_U32)
+```
 - Meta `rotate`: moves the top of the stack two positions down (`abc` becomes `bca`).
 ```c
 stack_ptx_encode_meta_rotate(STACK_PTX_STACK_TYPE_U32)

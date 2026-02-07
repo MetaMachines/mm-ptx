@@ -13,7 +13,7 @@ An example that shows a way to make routine libraries that are callable from Sta
 An example that shows the use of meta instructions that can manipulate stack values during generation of the AST.
 These instructions were heavily inspired by Lee Spector's [push](https://faculty.hampshire.edu/lspector/push.html) language and instructions.
 
-This example uses every meta instruction. Check the folders `out.txt` for the executable's output demonstrating the transformations.
+This example uses every meta instruction (including `clear`). Check the folders `out.txt` for the executable's output demonstrating the transformations.
 
 ## 04_special_registers
 An example that shows the use of special register instructions that can add special register names to Stack PTX 

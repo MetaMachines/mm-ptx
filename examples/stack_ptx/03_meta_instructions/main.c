@@ -289,6 +289,24 @@ main() {
     printf("drop_instructions:\n");
     run_instructions(drop_instructions, many_requests, STACK_PTX_ARRAY_NUM_ELEMS(many_requests), stack_ptx_workspace, stack_ptx_workspace_size);
 
+    // CLEAR
+    // Clear all values from the U32 stack, then push input_0.
+    // If clear is working, output_0 should resolve to input_0 (not to 5).
+    static const StackPtxInstruction clear_instructions[] = {
+        stack_ptx_encode_constant_u32(0),
+        stack_ptx_encode_constant_u32(1),
+        stack_ptx_encode_constant_u32(2),
+        stack_ptx_encode_constant_u32(3),
+        stack_ptx_encode_constant_u32(4),
+        stack_ptx_encode_constant_u32(5),
+        stack_ptx_encode_meta_clear(STACK_PTX_STACK_TYPE_U32),
+        input_0,
+        stack_ptx_encode_return
+    };
+
+    printf("clear_instructions:\n");
+    run_instructions(clear_instructions, &request, 1, stack_ptx_workspace, stack_ptx_workspace_size);
+
     // ROTATE
     // Drop the top 2 values from the U32 stack.
     static const StackPtxInstruction rotate_instructions[] = {

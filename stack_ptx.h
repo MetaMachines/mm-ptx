@@ -32,12 +32,12 @@
 
 #define STACK_PTX_VERSION_MAJOR 1 //!< Stack PTX major version.
 #define STACK_PTX_VERSION_MINOR 0 //!< Stack PTX minor version.
-#define STACK_PTX_VERSION_PATCH 0 //!< Stack PTX patch version.
+#define STACK_PTX_VERSION_PATCH 1 //!< Stack PTX patch version.
 
 /**
- * \brief String representation of the Stack PTX library version (e.g., "1.0.0").
+ * \brief String representation of the Stack PTX library version (e.g., "1.0.1").
  */
-#define STACK_PTX_VERSION_STRING "1.0.0"
+#define STACK_PTX_VERSION_STRING "1.0.1"
 
 #define STACK_PTX_VERSION (STACK_PTX_VERSION_MAJOR * 10000 + STACK_PTX_VERSION_MINOR * 100 + STACK_PTX_VERSION_PATCH)
 
@@ -175,6 +175,11 @@ typedef enum {
 	 * Should be encoded with the function or macro `stack_ptx_encode_meta`.
 	 */
 	STACK_PTX_META_INSTRUCTION_DROP,
+	/**
+	 * \brief Clears all values from the indicated stack.
+	 * Should be encoded with the function or macro `stack_ptx_encode_meta`.
+	 */
+	STACK_PTX_META_INSTRUCTION_CLEAR,
 	/**
 	 * \brief Takes the value at the top of the indicated stack and pushes it 2 deep.
 	 * 1,2,3 becomes 2,3,1.
@@ -969,6 +974,13 @@ _stack_ptx_ast_run_meta(
 					}
 				}
 			}
+			return STACK_PTX_SUCCESS;
+		};
+		case STACK_PTX_META_INSTRUCTION_CLEAR: {
+			for (size_t i = 0; i < (*stack_ptr); i++) {
+				stack[i] = 0;
+			}
+			(*stack_ptr) = 0;
 			return STACK_PTX_SUCCESS;
 		};
 		case STACK_PTX_META_INSTRUCTION_ROTATE: {

@@ -324,6 +324,7 @@ def _gen_c_header(
     append("#define stack_ptx_encode_meta_swap_with(ST) _STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_SWAP_WITH, ST, 0)\n")
     append("#define stack_ptx_encode_meta_replace(ST) 	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_REPLACE, ST, 0)\n")
     append("#define stack_ptx_encode_meta_drop(ST)		_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_DROP, ST, 0)\n")
+    append("#define stack_ptx_encode_meta_clear(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_CLEAR, ST, 0)\n")
     append("#define stack_ptx_encode_meta_rotate(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_ROTATE, ST, 0)\n")
     append("#define stack_ptx_encode_meta_reverse(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_REVERSE, ST, 0)\n\n")
 
@@ -627,6 +628,7 @@ constexpr StackPtxInstruction encode_meta_swap(StackType stack_type)        { re
 constexpr StackPtxInstruction encode_meta_swap_with(StackType stack_type)   { return _encode_meta(STACK_PTX_META_INSTRUCTION_SWAP_WITH, stack_type, 0); }
 constexpr StackPtxInstruction encode_meta_replace(StackType stack_type)     { return _encode_meta(STACK_PTX_META_INSTRUCTION_REPLACE, stack_type, 0); }
 constexpr StackPtxInstruction encode_meta_drop(StackType stack_type)        { return _encode_meta(STACK_PTX_META_INSTRUCTION_DROP, stack_type, 0); }
+constexpr StackPtxInstruction encode_meta_clear(StackType stack_type)       { return _encode_meta(STACK_PTX_META_INSTRUCTION_CLEAR, stack_type, 0); }
 constexpr StackPtxInstruction encode_meta_rotate(StackType stack_type)      { return _encode_meta(STACK_PTX_META_INSTRUCTION_ROTATE, stack_type, 0); }
 constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { return _encode_meta(STACK_PTX_META_INSTRUCTION_REVERSE, stack_type, 0); }
 """)
