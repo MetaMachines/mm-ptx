@@ -43,6 +43,7 @@ class Instruction:
     args: List[str]
     rets: List[str]
     aligned: bool
+    name: str
     display: str
 
 @dataclass(frozen=True)
@@ -145,15 +146,25 @@ def _normalize_and_validate(raw: Dict[str, Any]) -> Spec:
         ptx = ins["ptx"]
         args = list(ins.get("args", []))
         rets = list(ins.get("rets", []))
+        name = ins.get("name", ins.get("display", ptx))
         _require(len(args) <= 4, f"Instruction '{ptx}' has more than 4 args")
         _require(len(rets) <= 2, f"Instruction '{ptx}' has more than 2 returns")
+        _require(isinstance(name, str) and name.strip(), f"Instruction '{ptx}' has invalid name: {name!r}")
         for a in args:
             _require(a in arg_names, f"Instruction '{ptx}' references unknown arg type '{a}'")
         for r in rets:
             _require(r in arg_names, f"Instruction '{ptx}' returns unknown arg type '{r}'")
         aligned = _to_bool(ins.get("aligned", False))
         display = ins.get("display", ptx)
-        instructions.append(Instruction(ptx=ptx, args=args, rets=rets, aligned=aligned, display=display))
+        instructions.append(Instruction(
+            ptx=ptx,
+            args=args,
+            rets=rets,
+            aligned=aligned,
+            name=name,
+            display=display
+        ))
+    _unique_names(instructions, "name", "instruction")
 
     # special registers
     special_registers: List[SpecialRegister] = []
@@ -342,7 +353,7 @@ def _gen_c_header(
 
     append("typedef enum {\n")
     for ins in spec["instructions"]:
-        enum_name = _to_ident_upper(ins["display"])
+        enum_name = _to_ident_upper(ins["name"])
         append(f"    STACK_PTX_PTX_INSTRUCTION_{enum_name},\n")
     append("    STACK_PTX_PTX_INSTRUCTION_NUM_ENUMS\n} StackPtxPtxInstruction;\n\n")
 
@@ -383,8 +394,8 @@ def _gen_c_header(
     disp_names = []
     ptx_names = []
     for ins in spec["instructions"]:
-        ename = _to_ident_upper(ins["display"])
-        vname = _to_ident_lower(ins["display"])
+        ename = _to_ident_upper(ins["name"])
+        vname = _to_ident_lower(ins["name"])
         args4 = _pad_args([f"STACK_PTX_ARG_TYPE_{a}" for a in ins["args"]], 4, "STACK_PTX_ARG_TYPE_NONE")
         rets2 = _pad_args([f"STACK_PTX_ARG_TYPE_{r}" for r in ins["rets"]], 2, "STACK_PTX_ARG_TYPE_NONE")
         aligned = "1" if ins["aligned"] else "0"
@@ -403,8 +414,8 @@ def _gen_c_header(
     append("};\n\n")
     append("static const StackPtxInstruction stack_ptx_ptx_instructions[] = {\n")
     for ins in spec["instructions"]:
-        vname = _to_ident_lower(ins["display"])
-        append(f"    [STACK_PTX_PTX_INSTRUCTION_{_to_ident_upper(ins['display'])}] = "
+        vname = _to_ident_lower(ins["name"])
+        append(f"    [STACK_PTX_PTX_INSTRUCTION_{_to_ident_upper(ins['name'])}] = "
                f"stack_ptx_encode_ptx_instruction_{vname},\n")
     append("};\n\n")
 
@@ -486,7 +497,7 @@ def _gen_cpp_header(
 
     a("enum class PtxInstruction {\n")
     for ins in spec["instructions"]:
-        a(f"    {_to_ident_upper(ins['display'])},\n")
+        a(f"    {_to_ident_upper(ins['name'])},\n")
     a("    NUM_ENUMS\n};\n\n")
 
     a("enum class SpecialRegister {\n")
@@ -639,8 +650,8 @@ constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { re
     disp = []
     ptxnames = []
     for ins in spec["instructions"]:
-        vname = _to_ident_lower(ins["display"])
-        ename = _to_ident_upper(ins["display"])
+        vname = _to_ident_lower(ins["name"])
+        ename = _to_ident_upper(ins["name"])
         args4 = _pad_args([f"ArgType::{a}" for a in ins["args"]], 4, "ArgType::NONE")
         rets2 = _pad_args([f"ArgType::{r}" for r in ins["rets"]], 2, "ArgType::NONE")
         is_aligned = "true" if ins["aligned"] else "false"
@@ -658,7 +669,7 @@ constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { re
     a("};\n\n")
     a("static const StackPtxInstruction ptx_instructions[] = {\n")
     for ins in spec["instructions"]:
-        a(f"    encode_ptx_instruction_{_to_ident_lower(ins['display'])},\n")
+        a(f"    encode_ptx_instruction_{_to_ident_lower(ins['name'])},\n")
     a("};\n\n")
 
     # special registers

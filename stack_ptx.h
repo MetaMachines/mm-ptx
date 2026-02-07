@@ -848,11 +848,12 @@ _stack_ptx_ast_run_ptx(
 	// This gives a target in the stack values for which return value they belong to
 	// We can then rewrite these instructions in place as registers if they get their assignments
 	size_t ret_idx = 0;
-	for (size_t ret_num = 0; ret_num < STACK_PTX_MAX_NUM_PTX_RETS; ret_num++) {
+	// Return placeholders are rewritten later from the last return AST entry backward.
+	// Emit stack placeholders in reverse return order so each typed stack points at
+	// the matching rewritten return register.
+	for (size_t ret_num_rev = num_rets; ret_num_rev > 0; ret_num_rev--) {
+		size_t ret_num = ret_num_rev - 1;
 		StackPtxArgIdx arg_idx = arg_type_rets[ret_num];
-		if (arg_idx == compiler->stack_info.num_arg_types) {
-			break;
-		}
 
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
 		
