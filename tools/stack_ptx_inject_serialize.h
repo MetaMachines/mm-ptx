@@ -623,6 +623,9 @@ _stack_ptx_stack_info_serialize_size(
             stack_info_ref->special_register_strings, 
             stack_info_ref->num_special_registers
         );
+
+    total += stack_info_ref->num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor);
+    total += stack_info_ref->num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor);
     
     total += 
         _stack_ptx_measure_string_array_size(
@@ -678,6 +681,13 @@ stack_ptx_stack_info_serialize(
     );
     p += buffer_offset;
 
+    memcpy(
+        p,
+        stack_info_ref->ptx_instruction_descriptors,
+        stack_info_ref->num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor)
+    );
+    p += stack_info_ref->num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor);
+
     _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
         _stack_ptx_serialize_string_array(
             stack_info_ref->special_register_strings, 
@@ -687,6 +697,13 @@ stack_ptx_stack_info_serialize(
         )
     );
     p += buffer_offset;
+
+    memcpy(
+        p,
+        stack_info_ref->special_register_descriptors,
+        stack_info_ref->num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor)
+    );
+    p += stack_info_ref->num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor);
 
     _STACK_PTX_INJECT_SERIALIZE_CHECK_RET(
         _stack_ptx_serialize_string_array(
@@ -742,6 +759,9 @@ _stack_ptx_stack_info_deserialize_size(
         total_bytes += string_size;
     }
 
+    total_bytes += num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor);
+    p += num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor);
+
     size_t num_special_registers;
     memcpy(&num_special_registers, p, sizeof(size_t));
     p += sizeof(size_t);
@@ -752,6 +772,9 @@ _stack_ptx_stack_info_deserialize_size(
         p += string_size;
         total_bytes += string_size;
     }
+
+    total_bytes += num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor);
+    p += num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor);
 
     size_t num_stacks;
     memcpy(&num_stacks, p, sizeof(size_t));
@@ -834,6 +857,14 @@ stack_ptx_stack_info_deserialize(
             p += string_size;
         }
         deserialize_offset = deserialize_string_offset;
+        (*stack_info_out)->ptx_instruction_descriptors = (StackPtxPtxInstructionDescriptor*)deserialize_offset;
+        memcpy(
+            deserialize_offset,
+            p,
+            num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor)
+        );
+        p += num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor);
+        deserialize_offset += num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor);
     }
 
     {
@@ -853,6 +884,14 @@ stack_ptx_stack_info_deserialize(
             p += string_size;
         }
         deserialize_offset = deserialize_string_offset;
+        (*stack_info_out)->special_register_descriptors = (StackPtxSpecialRegisterDescriptor*)deserialize_offset;
+        memcpy(
+            deserialize_offset,
+            p,
+            num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor)
+        );
+        p += num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor);
+        deserialize_offset += num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor);
     }
 
     {
@@ -959,6 +998,26 @@ stack_ptx_stack_info_equal(
         return false;
     }
 
+    if (
+        memcmp(
+            stack_info_x->ptx_instruction_descriptors,
+            stack_info_y->ptx_instruction_descriptors,
+            stack_info_x->num_ptx_instructions * sizeof(StackPtxPtxInstructionDescriptor)
+        ) != 0
+    ) {
+        return false;
+    }
+
+    if (
+        memcmp(
+            stack_info_x->special_register_descriptors,
+            stack_info_y->special_register_descriptors,
+            stack_info_x->num_special_registers * sizeof(StackPtxSpecialRegisterDescriptor)
+        ) != 0
+    ) {
+        return false;
+    }
+
     return true;
 
 }
@@ -983,6 +1042,23 @@ stack_ptx_stack_info_print(
         printf("\t\t%s\n", stack_info->special_register_strings[i]);
     }
 
+    printf("\tPTX Instruction Descriptors:\n");
+    for (size_t i = 0; i < stack_info->num_ptx_instructions; i++) {
+        const StackPtxPtxInstructionDescriptor* descriptor = &stack_info->ptx_instruction_descriptors[i];
+        printf(
+            "\t\t%zu : aligned=%u unique_stacks=%u\n",
+            i,
+            (unsigned)descriptor->is_aligned,
+            (unsigned)descriptor->num_unique_stacks
+        );
+    }
+
+    printf("\tSpecial Register Descriptors:\n");
+    for (size_t i = 0; i < stack_info->num_special_registers; i++) {
+        const StackPtxSpecialRegisterDescriptor* descriptor = &stack_info->special_register_descriptors[i];
+        printf("\t\t%zu : %u\n", i, (unsigned)descriptor->arg_type_idx);
+    }
+
     printf("\tLiteral Prefixes:\n");
     for (size_t i = 0; i < stack_info->num_stacks; i++) {
         printf("\t\t%s\n", stack_info->stack_literal_prefixes[i]);
@@ -992,9 +1068,9 @@ stack_ptx_stack_info_print(
     for (size_t i = 0; i < stack_info->num_arg_types; i++) {
         const StackPtxArgTypeInfo* arg_type_info = &stack_info->arg_type_info[i];
         printf(
-            "\t\t%zu : %zu\n", 
-            arg_type_info->stack_idx,
-            arg_type_info->num_vec_elems
+            "\t\t%u : %u\n",
+            (unsigned)arg_type_info->stack_idx,
+            (unsigned)arg_type_info->num_vec_elems
         );
     }
 
@@ -1011,7 +1087,7 @@ _stack_ptx_registers_serialize_size(
 ) {
     size_t total = 0;
     total += sizeof(size_t);
-    total += num_registers * sizeof(size_t);
+    total += num_registers * sizeof(StackPtxStackIdx);
     for (size_t i = 0; i < num_registers; i++) {
         const char* name = registers[i].name;
         size_t name_size = strlen(name) + 1;
@@ -1057,9 +1133,9 @@ stack_ptx_registers_serialize(
     p += sizeof(size_t);
 
     for (size_t i = 0; i < num_registers; i++) {
-        size_t stack_idx = registers[i].stack_idx;
-        memcpy(p, &stack_idx, sizeof(size_t));
-        p += sizeof(size_t);
+        StackPtxStackIdx stack_idx = registers[i].stack_idx;
+        memcpy(p, &stack_idx, sizeof(StackPtxStackIdx));
+        p += sizeof(StackPtxStackIdx);
     }
 
     for (size_t i = 0; i < num_registers; i++) {
@@ -1098,7 +1174,7 @@ _stack_ptx_registers_deserialize_size(
     p += sizeof(size_t);
 
     total_bytes += num_registers * sizeof(StackPtxRegister);
-    p += num_registers * sizeof(size_t);
+    p += num_registers * sizeof(StackPtxStackIdx);
 
     for (size_t i = 0; i < num_registers; i++) {
         size_t string_size = strlen(p) + 1;
@@ -1156,8 +1232,8 @@ stack_ptx_registers_deserialize(
     *registers_out = (StackPtxRegister*)aligned_buffer;
     for (size_t i = 0; i < num_registers; i++) {
         StackPtxRegister* reg = &(*registers_out)[i];
-        memcpy(&reg->stack_idx, p, sizeof(size_t));
-        p += sizeof(size_t);
+        memcpy(&reg->stack_idx, p, sizeof(StackPtxStackIdx));
+        p += sizeof(StackPtxStackIdx);
     }
     
     uint8_t* deserialize_offset = aligned_buffer + num_registers * sizeof(StackPtxRegister);
