@@ -503,6 +503,7 @@ typedef struct {
 
 	StackPtxAstIdx* stacks;
 	StackPtxStackPtr* stack_ptrs;
+	StackPtxStackPtr* request_stack_ptrs;
 
 	// Counters for registers
 	StackPtxRegisterCounter* register_counters;
@@ -1630,19 +1631,18 @@ _stack_ptx_compile(
 	size_t buffer_size,
 	size_t* buffer_bytes_written_ret
 ) {
+	memcpy(
+		compiler->request_stack_ptrs,
+		compiler->stack_ptrs,
+		compiler->stack_info.num_stacks * sizeof(StackPtxStackPtr)
+	);
+
 	for (size_t i = 0; i < num_requests; i++) {
 		StackPtxStackIdx stack_idx = compiler->registers[requests[i]].stack_idx;
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 
-		size_t request_depth = 0;
-		for (size_t j = 0; j < i; j++) {
-			if (compiler->registers[requests[j]].stack_idx == stack_idx) {
-				request_depth++;
-			}
-		}
-
-		if (compiler->stack_ptrs[stack_idx] > request_depth) {
-			StackPtxStackPtr stack_ptr = compiler->stack_ptrs[stack_idx] - request_depth - 1;
+		if (compiler->request_stack_ptrs[stack_idx] > 0) {
+			StackPtxStackPtr stack_ptr = --compiler->request_stack_ptrs[stack_idx];
 			StackPtxAstIdx ast_idx = compiler->stacks[stack_idx * compiler->compiler_info.stack_size + stack_ptr];
 			if (compiler->ast_to_visit_stack_ptr >= compiler->compiler_info.max_ast_to_visit_stack_depth) {
 				_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_VISIT_SIZE );
@@ -1799,6 +1799,7 @@ stack_ptx_compile_workspace_size(
     size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * 	sizeof(StackPtxAstIdx);
 	size_t stacks_num_bytes = 				num_stacks * stack_size * 		sizeof(StackPtxAstIdx);
 	size_t stack_ptrs_num_bytes = 			num_stacks * 					sizeof(StackPtxStackPtr);
+	size_t request_stack_ptrs_num_bytes = 	num_stacks * 					sizeof(StackPtxStackPtr);
 	size_t register_counters_num_bytes =	num_stacks * 					sizeof(StackPtxRegisterCounter);
 	size_t meta_stack_num_bytes = 			stack_size * 					sizeof(StackPtxMetaConstant);
 	size_t stack_frames_num_bytes = 		max_frame_depth * 				sizeof(StackPtxStackFrame);
@@ -1809,7 +1810,8 @@ stack_ptx_compile_workspace_size(
 	size_t ast_to_visit_offset = 		ast_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, 					_STACK_PTX_ALIGNMENT);
 	size_t stacks_offset =				ast_to_visit_offset + 		_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes,			_STACK_PTX_ALIGNMENT);
 	size_t stack_ptrs_offset =			stacks_offset +				_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes,				_STACK_PTX_ALIGNMENT);
-	size_t register_counters_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
+	size_t request_stack_ptrs_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
+	size_t register_counters_offset =	request_stack_ptrs_offset + _STACK_PTX_ALIGNMENT_UP(request_stack_ptrs_num_bytes,	_STACK_PTX_ALIGNMENT);
 	size_t meta_stack_offset =			register_counters_offset +	_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes,	_STACK_PTX_ALIGNMENT);
 	size_t stack_frames_offset =		meta_stack_offset +			_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes,			_STACK_PTX_ALIGNMENT);
 	size_t store_offset =				stack_frames_offset +		_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes,			_STACK_PTX_ALIGNMENT);
@@ -1860,6 +1862,7 @@ stack_ptx_compile(
     size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * 	sizeof(StackPtxAstIdx);
 	size_t stacks_num_bytes = 				num_stacks * stack_size * 		sizeof(StackPtxAstIdx);
 	size_t stack_ptrs_num_bytes = 			num_stacks * 					sizeof(StackPtxStackPtr);
+	size_t request_stack_ptrs_num_bytes = 	num_stacks * 					sizeof(StackPtxStackPtr);
 	size_t register_counters_num_bytes =	num_stacks * 					sizeof(StackPtxRegisterCounter);
 	size_t meta_stack_num_bytes = 			stack_size * 					sizeof(StackPtxMetaConstant);
 	size_t stack_frames_num_bytes = 		max_frame_depth * 				sizeof(StackPtxStackFrame);
@@ -1870,7 +1873,8 @@ stack_ptx_compile(
 	size_t ast_to_visit_offset = 		ast_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, 					_STACK_PTX_ALIGNMENT);
 	size_t stacks_offset =				ast_to_visit_offset + 		_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes,			_STACK_PTX_ALIGNMENT);
 	size_t stack_ptrs_offset =			stacks_offset +				_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes,				_STACK_PTX_ALIGNMENT);
-	size_t register_counters_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
+	size_t request_stack_ptrs_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
+	size_t register_counters_offset =	request_stack_ptrs_offset + _STACK_PTX_ALIGNMENT_UP(request_stack_ptrs_num_bytes,	_STACK_PTX_ALIGNMENT);
 	size_t meta_stack_offset =			register_counters_offset +	_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes,	_STACK_PTX_ALIGNMENT);
 	size_t stack_frames_offset =		meta_stack_offset +			_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes,			_STACK_PTX_ALIGNMENT);
 	size_t store_offset =				stack_frames_offset +		_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes,			_STACK_PTX_ALIGNMENT);
@@ -1906,6 +1910,7 @@ stack_ptx_compile(
 
 	compiler->stacks =								(StackPtxAstIdx*)((char*)workspace + stacks_offset);
 	compiler->stack_ptrs = 							(StackPtxStackPtr*)((char*)workspace + stack_ptrs_offset);
+	compiler->request_stack_ptrs = 					(StackPtxStackPtr*)((char*)workspace + request_stack_ptrs_offset);
 
 	compiler->register_counters = 					(StackPtxRegisterCounter*)((char*)workspace + register_counters_offset);
 
@@ -1919,6 +1924,7 @@ stack_ptx_compile(
 
 	memset(compiler->stacks, 			0, 	num_stacks * stack_size * 	sizeof(StackPtxAstIdx));
 	memset(compiler->stack_ptrs, 		0,	num_stacks * 				sizeof(StackPtxStackPtr));
+	memset(compiler->request_stack_ptrs,	0,	num_stacks * 				sizeof(StackPtxStackPtr));
 	memset(compiler->register_counters,	0, 	num_stacks *				sizeof(StackPtxRegisterCounter));
 	memset(compiler->stack_frames, 		0, 	max_frame_depth * 			sizeof(StackPtxStackFrame));
 	memset(compiler->store, 			0, 	store_size * 				sizeof(StackPtxInstruction));
