@@ -413,6 +413,18 @@ _stack_ptx_instruction_set_ret_idx(
 	instruction->aux = (uint16_t)ret_idx;
 }
 
+static
+inline
+StackPtxResult
+_stack_ptx_check_ret_idx_range(
+	size_t ret_idx
+) {
+	if (ret_idx > UINT16_MAX) {
+		return STACK_PTX_ERROR_INVALID_VALUE;
+	}
+	return STACK_PTX_SUCCESS;
+}
+
 /**
  * \brief Can modify to change default Stack PTX tabbing for output PTX.
  */
@@ -881,6 +893,7 @@ _stack_ptx_ast_run_ptx(
 	_STACK_PTX_CHECK_RET( _stack_ptx_ptx_instruction_num_args(compiler, instruction, &num_args_flat, &num_args_unused) );
 	_STACK_PTX_CHECK_RET( _stack_ptx_ptx_instruction_num_rets(compiler, instruction, &num_rets_flat, &num_rets) );
 	(void)num_args_unused;
+	_STACK_PTX_CHECK_RET( _stack_ptx_check_ret_idx_range(num_rets_flat) );
 
 	for (size_t i = 0; i < descriptor->num_unique_stacks; i++) {
 		StackPtxStackIdx stack_idx = descriptor->unique_stacks[i].stack_idx;
@@ -1617,14 +1630,19 @@ _stack_ptx_compile(
 	size_t buffer_size,
 	size_t* buffer_bytes_written_ret
 ) {
-	StackPtxStackPtr request_stack_ptrs[STACK_PTX_MAX_NUM_STACKS];
-	memcpy(request_stack_ptrs, compiler->stack_ptrs, compiler->stack_info.num_stacks * sizeof(StackPtxStackPtr));
 	for (size_t i = 0; i < num_requests; i++) {
 		StackPtxStackIdx stack_idx = compiler->registers[requests[i]].stack_idx;
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 
-		if (request_stack_ptrs[stack_idx] > 0) {
-			StackPtxStackPtr stack_ptr = --request_stack_ptrs[stack_idx];
+		size_t request_depth = 0;
+		for (size_t j = 0; j < i; j++) {
+			if (compiler->registers[requests[j]].stack_idx == stack_idx) {
+				request_depth++;
+			}
+		}
+
+		if (compiler->stack_ptrs[stack_idx] > request_depth) {
+			StackPtxStackPtr stack_ptr = compiler->stack_ptrs[stack_idx] - request_depth - 1;
 			StackPtxAstIdx ast_idx = compiler->stacks[stack_idx * compiler->compiler_info.stack_size + stack_ptr];
 			if (compiler->ast_to_visit_stack_ptr >= compiler->compiler_info.max_ast_to_visit_stack_depth) {
 				_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_VISIT_SIZE );

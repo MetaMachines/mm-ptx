@@ -1241,7 +1241,7 @@ stack_ptx_registers_deserialize(
         StackPtxRegister* reg = &(*registers_out)[i];
         size_t name_size = strlen(p) + 1;
         reg->name = deserialize_offset;
-        memcpy(deserialize_offset, p, sizeof(size_t));
+        memcpy(deserialize_offset, p, name_size);
         p += name_size;
         deserialize_offset += name_size;
     }

@@ -133,11 +133,14 @@ def _normalize_and_validate(raw: Dict[str, Any]) -> Spec:
 
     # arg types
     arg_types = [ArgType(at["name"], at["stack_type"], int(at.get("num_vec_elems", 0))) for at in raw["arg_types"]]
+    _require(len(arg_types) <= ((1 << 16) - 1), f"Too many arg_types ({len(arg_types)} > 65535)")
     _unique_names(arg_types, "name", "arg_type")
     for at in arg_types:
         _require(at.stack_type in stack_names, f"ArgType '{at.name}' references unknown stack_type '{at.stack_type}'")
         _require(at.num_vec_elems >= 0, f"ArgType '{at.name}' must have num_vec_elems >= 0")
+        _require(at.num_vec_elems <= ((1 << 16) - 1), f"ArgType '{at.name}' num_vec_elems exceeds 65535")
     arg_names = {a.name for a in arg_types}
+    arg_type_lookup = {at.name: at for at in arg_types}
 
     # instructions
     instructions: List[Instruction] = []
@@ -153,6 +156,8 @@ def _normalize_and_validate(raw: Dict[str, Any]) -> Spec:
             _require(a in arg_names, f"Instruction '{ptx}' references unknown arg type '{a}'")
         for r in rets:
             _require(r in arg_names, f"Instruction '{ptx}' returns unknown arg type '{r}'")
+        ret_stack_elems = sum(max(arg_type_lookup[r].num_vec_elems, 1) for r in rets)
+        _require(ret_stack_elems <= ((1 << 16) - 1), f"Instruction '{ptx}' returns too many stack elems ({ret_stack_elems} > 65535)")
         aligned = _to_bool(ins.get("aligned", False))
         display = ins.get("display", ptx)
         instructions.append(Instruction(
