@@ -1780,45 +1780,115 @@ _stack_ptx_write_register_declaration(
 	return STACK_PTX_SUCCESS;
 }
 
-STACK_PTX_PUBLIC_DEF 
-StackPtxResult 
+static
+inline
+StackPtxResult
+_stack_ptx_setup_compiler_workspace(
+	const StackPtxCompilerInfo* compiler_info_ref,
+	const StackPtxStackInfo* stack_info_ref,
+	void* workspace,
+	size_t workspace_in_bytes,
+	size_t* workspace_in_bytes_out,
+	StackPtxCompiler** compiler_out
+) {
+	const size_t max_ast_size = compiler_info_ref->max_ast_size;
+	const size_t max_ast_to_visit_stack_depth = compiler_info_ref->max_ast_to_visit_stack_depth;
+	const size_t stack_size = compiler_info_ref->stack_size;
+	const size_t max_frame_depth = compiler_info_ref->max_frame_depth;
+	const size_t num_stacks = stack_info_ref->num_stacks;
+	const size_t store_size = compiler_info_ref->store_size;
+
+	const size_t compiler_num_bytes = 			sizeof(StackPtxCompiler);
+	const size_t ast_num_bytes = 				max_ast_size * sizeof(StackPtxInstruction);
+	const size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * sizeof(StackPtxAstIdx);
+	const size_t stacks_num_bytes = 			num_stacks * stack_size * sizeof(StackPtxAstIdx);
+	const size_t stack_ptrs_num_bytes = 		num_stacks * sizeof(StackPtxStackPtr);
+	const size_t request_stack_ptrs_num_bytes = num_stacks * sizeof(StackPtxStackPtr);
+	const size_t register_counters_num_bytes = 	num_stacks * sizeof(StackPtxRegisterCounter);
+	const size_t meta_stack_num_bytes = 		stack_size * sizeof(StackPtxMetaConstant);
+	const size_t stack_frames_num_bytes = 		max_frame_depth * sizeof(StackPtxStackFrame);
+	const size_t store_num_bytes = 				store_size * sizeof(StackPtxInstruction);
+
+	const size_t compiler_offset = 				0;
+	const size_t ast_offset =					compiler_offset + 					_STACK_PTX_ALIGNMENT_UP(compiler_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t ast_to_visit_offset =			ast_offset + 						_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t stacks_offset =				ast_to_visit_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t stack_ptrs_offset =			stacks_offset + 					_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t request_stack_ptrs_offset =    stack_ptrs_offset + 				_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t register_counters_offset = 	request_stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(request_stack_ptrs_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t meta_stack_offset =			register_counters_offset + 			_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t stack_frames_offset =			meta_stack_offset + 				_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t store_offset =					stack_frames_offset +				_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t total_size = 					store_offset + store_num_bytes + 	_STACK_PTX_ALIGNMENT;
+
+	if (workspace_in_bytes_out != NULL) {
+		*workspace_in_bytes_out = total_size;
+	}
+
+	if (compiler_out == NULL) {
+		return STACK_PTX_SUCCESS;
+	}
+
+	*compiler_out = NULL;
+
+	if (workspace == NULL) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_INVALID_VALUE );
+	}
+
+	if (total_size > workspace_in_bytes) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_WORKSPACE );
+	}
+
+	const uintptr_t address = (uintptr_t)workspace;
+	const uintptr_t aligned_address = _STACK_PTX_ALIGNMENT_UP(address, _STACK_PTX_ALIGNMENT);
+	void* const aligned_workspace = (void*)aligned_address;
+
+	StackPtxCompiler* const compiler = (StackPtxCompiler*)((char*)aligned_workspace + compiler_offset);
+
+	compiler->compiler_info = 						*compiler_info_ref;
+	compiler->stack_info = 							*stack_info_ref;
+	compiler->ast = 								(StackPtxInstruction*)((char*)aligned_workspace + ast_offset);
+	compiler->ast_size = 							0;
+	compiler->ast_to_visit_stack = 					(StackPtxAstIdx*)((char*)aligned_workspace + ast_to_visit_offset);
+	compiler->ast_to_visit_stack_max_depth_usage = 	0;
+	compiler->ast_to_visit_stack_ptr = 				0;
+	compiler->stacks = 								(StackPtxAstIdx*)((char*)aligned_workspace + stacks_offset);
+	compiler->stack_ptrs = 							(StackPtxStackPtr*)((char*)aligned_workspace + stack_ptrs_offset);
+	compiler->request_stack_ptrs = 					(StackPtxStackPtr*)((char*)aligned_workspace + request_stack_ptrs_offset);
+	compiler->register_counters = 					(StackPtxRegisterCounter*)((char*)aligned_workspace + register_counters_offset);
+	compiler->meta_stack = 							(StackPtxMetaConstant*)((char*)aligned_workspace + meta_stack_offset);
+	compiler->meta_stack_ptr = 						0;
+	compiler->stack_frames = 						(StackPtxStackFrame*)((char*)aligned_workspace + stack_frames_offset);
+	compiler->frame_ptr = 							0;
+	compiler->store = 								(StackPtxInstruction*)((char*)aligned_workspace + store_offset);
+
+	memset(compiler->stacks, 0, stacks_num_bytes);
+	memset(compiler->stack_ptrs, 0, stack_ptrs_num_bytes);
+	memset(compiler->request_stack_ptrs, 0, request_stack_ptrs_num_bytes);
+	memset(compiler->register_counters, 0, register_counters_num_bytes);
+	memset(compiler->stack_frames, 0, stack_frames_num_bytes);
+	memset(compiler->store, 0, store_num_bytes);
+
+	*compiler_out = compiler;
+
+	return STACK_PTX_SUCCESS;
+}
+
+STACK_PTX_PUBLIC_DEF
+StackPtxResult
 stack_ptx_compile_workspace_size(
 	const StackPtxCompilerInfo* compiler_info_ref,
 	const StackPtxStackInfo* stack_info_ref,
 	size_t* workspace_in_bytes_out
 ) {
-	size_t max_ast_size = compiler_info_ref->max_ast_size;
-	size_t max_ast_to_visit_stack_depth = compiler_info_ref->max_ast_to_visit_stack_depth;
-	size_t stack_size = compiler_info_ref->stack_size;
-	size_t max_frame_depth = compiler_info_ref->max_frame_depth;
-	size_t num_stacks = stack_info_ref->num_stacks;
-	size_t store_size = compiler_info_ref->store_size;
-
-	size_t compiler_num_bytes = 											sizeof(StackPtxCompiler);
-    size_t ast_num_bytes = 					max_ast_size * 					sizeof(StackPtxInstruction);
-    size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * 	sizeof(StackPtxAstIdx);
-	size_t stacks_num_bytes = 				num_stacks * stack_size * 		sizeof(StackPtxAstIdx);
-	size_t stack_ptrs_num_bytes = 			num_stacks * 					sizeof(StackPtxStackPtr);
-	size_t request_stack_ptrs_num_bytes = 	num_stacks * 					sizeof(StackPtxStackPtr);
-	size_t register_counters_num_bytes =	num_stacks * 					sizeof(StackPtxRegisterCounter);
-	size_t meta_stack_num_bytes = 			stack_size * 					sizeof(StackPtxMetaConstant);
-	size_t stack_frames_num_bytes = 		max_frame_depth * 				sizeof(StackPtxStackFrame);
-	size_t store_num_bytes =				store_size *					sizeof(StackPtxInstruction);
-
-	size_t compiler_offset = 0;
-	size_t ast_offset = 				compiler_offset + 			_STACK_PTX_ALIGNMENT_UP(compiler_num_bytes, 			_STACK_PTX_ALIGNMENT);
-	size_t ast_to_visit_offset = 		ast_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, 					_STACK_PTX_ALIGNMENT);
-	size_t stacks_offset =				ast_to_visit_offset + 		_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t stack_ptrs_offset =			stacks_offset +				_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes,				_STACK_PTX_ALIGNMENT);
-	size_t request_stack_ptrs_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t register_counters_offset =	request_stack_ptrs_offset + _STACK_PTX_ALIGNMENT_UP(request_stack_ptrs_num_bytes,	_STACK_PTX_ALIGNMENT);
-	size_t meta_stack_offset =			register_counters_offset +	_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes,	_STACK_PTX_ALIGNMENT);
-	size_t stack_frames_offset =		meta_stack_offset +			_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t store_offset =				stack_frames_offset +		_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes,			_STACK_PTX_ALIGNMENT);
-
-	size_t total_size = 			store_offset + store_num_bytes + _STACK_PTX_ALIGNMENT;
-
-	*workspace_in_bytes_out = total_size;
+	_STACK_PTX_CHECK_RET( _stack_ptx_setup_compiler_workspace(
+		compiler_info_ref,
+		stack_info_ref,
+		NULL,
+		0,
+		workspace_in_bytes_out,
+		NULL
+	) );
 
 	return STACK_PTX_SUCCESS;
 }
@@ -1827,107 +1897,39 @@ STACK_PTX_PUBLIC_DEF
 StackPtxResult
 stack_ptx_compile(
 	const StackPtxCompilerInfo* compiler_info_ref,
-	const StackPtxStackInfo* 	stack_info_ref,
-    const StackPtxInstruction* 	instructions,
-	const StackPtxRegister* 	registers,
-	size_t 						num_registers,
+	const StackPtxStackInfo* stack_info_ref,
+	const StackPtxInstruction* instructions,
+	const StackPtxRegister* registers,
+	size_t num_registers,
 	const StackPtxInstruction** routines,
-	size_t 						num_routines,
-	const size_t* 				requests,
-    size_t 						num_requests,
-	size_t 						execution_limit,
-	void* 						workspace,
-	size_t 						workspace_in_bytes,
-	char* 						buffer,
-	size_t 						buffer_size,
-	size_t* 					buffer_bytes_written_ret
+	size_t num_routines,
+	const size_t* requests,
+	size_t num_requests,
+	size_t execution_limit,
+	void* workspace,
+	size_t workspace_in_bytes,
+	char* buffer,
+	size_t buffer_size,
+	size_t* buffer_bytes_written_ret
 ) {
-	if (workspace == NULL) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_INVALID_VALUE );
-	}
-
 	if (stack_info_ref->num_stacks > STACK_PTX_MAX_NUM_STACKS) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_INVALID_VALUE );
 	}
 
-	size_t max_ast_size = compiler_info_ref->max_ast_size;
-	size_t max_ast_to_visit_stack_depth = compiler_info_ref->max_ast_to_visit_stack_depth;
-	size_t stack_size = compiler_info_ref->stack_size;
-	size_t max_frame_depth = compiler_info_ref->max_frame_depth;
-	size_t num_stacks = stack_info_ref->num_stacks;
-	size_t store_size = compiler_info_ref->store_size;
+	StackPtxCompiler* compiler = NULL;
+	_STACK_PTX_CHECK_RET( _stack_ptx_setup_compiler_workspace(
+		compiler_info_ref,
+		stack_info_ref,
+		workspace,
+		workspace_in_bytes,
+		NULL,
+		&compiler
+	) );
 
-	size_t compiler_num_bytes = 											sizeof(StackPtxCompiler);
-    size_t ast_num_bytes = 					max_ast_size * 					sizeof(StackPtxInstruction);
-    size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * 	sizeof(StackPtxAstIdx);
-	size_t stacks_num_bytes = 				num_stacks * stack_size * 		sizeof(StackPtxAstIdx);
-	size_t stack_ptrs_num_bytes = 			num_stacks * 					sizeof(StackPtxStackPtr);
-	size_t request_stack_ptrs_num_bytes = 	num_stacks * 					sizeof(StackPtxStackPtr);
-	size_t register_counters_num_bytes =	num_stacks * 					sizeof(StackPtxRegisterCounter);
-	size_t meta_stack_num_bytes = 			stack_size * 					sizeof(StackPtxMetaConstant);
-	size_t stack_frames_num_bytes = 		max_frame_depth * 				sizeof(StackPtxStackFrame);
-	size_t store_num_bytes =				store_size *					sizeof(StackPtxInstruction);
-
-	size_t compiler_offset = 0;
-	size_t ast_offset = 				compiler_offset + 			_STACK_PTX_ALIGNMENT_UP(compiler_num_bytes, 			_STACK_PTX_ALIGNMENT);
-	size_t ast_to_visit_offset = 		ast_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, 					_STACK_PTX_ALIGNMENT);
-	size_t stacks_offset =				ast_to_visit_offset + 		_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t stack_ptrs_offset =			stacks_offset +				_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes,				_STACK_PTX_ALIGNMENT);
-	size_t request_stack_ptrs_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t register_counters_offset =	request_stack_ptrs_offset + _STACK_PTX_ALIGNMENT_UP(request_stack_ptrs_num_bytes,	_STACK_PTX_ALIGNMENT);
-	size_t meta_stack_offset =			register_counters_offset +	_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes,	_STACK_PTX_ALIGNMENT);
-	size_t stack_frames_offset =		meta_stack_offset +			_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t store_offset =				stack_frames_offset +		_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes,			_STACK_PTX_ALIGNMENT);
-
-	size_t total_size = 			store_offset + store_num_bytes + _STACK_PTX_ALIGNMENT;
-
-	if (total_size > workspace_in_bytes) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_WORKSPACE );
-	}
-
-	// Find the first address in workspace that is aligned to our requirement.
-	uintptr_t address = (uintptr_t)workspace;
-	uintptr_t aligned_address = _STACK_PTX_ALIGNMENT_UP(address, _STACK_PTX_ALIGNMENT);
-
-	workspace = (void*)aligned_address;
-
-	StackPtxCompiler* compiler = 					(StackPtxCompiler*)((char*)workspace + compiler_offset);
-
-	compiler->compiler_info = 						*compiler_info_ref;
-	compiler->stack_info =							*stack_info_ref;
-
-	compiler->registers = 							registers;
-	compiler->num_registers = 						num_registers;
-	compiler->routines = 							routines;
-	compiler->num_routines = 						num_routines;
-	
-	compiler->ast = 								(StackPtxInstruction*)((char*)workspace + ast_offset);
-	compiler->ast_size = 							0;
-
-	compiler->ast_to_visit_stack = 					(StackPtxAstIdx*)((char*)workspace + ast_to_visit_offset);
-	compiler->ast_to_visit_stack_max_depth_usage = 	0;
-	compiler->ast_to_visit_stack_ptr = 				0;
-
-	compiler->stacks =								(StackPtxAstIdx*)((char*)workspace + stacks_offset);
-	compiler->stack_ptrs = 							(StackPtxStackPtr*)((char*)workspace + stack_ptrs_offset);
-	compiler->request_stack_ptrs = 					(StackPtxStackPtr*)((char*)workspace + request_stack_ptrs_offset);
-
-	compiler->register_counters = 					(StackPtxRegisterCounter*)((char*)workspace + register_counters_offset);
-
-	compiler->meta_stack = 							(StackPtxMetaConstant*)((char*)workspace + meta_stack_offset);
-	compiler->meta_stack_ptr = 						0;
-
-	compiler->stack_frames = 						(StackPtxStackFrame*)((char*)workspace + stack_frames_offset);
-	compiler->frame_ptr = 							0;
-
-	compiler->store =								(StackPtxInstruction*)((char*)workspace + store_offset);
-
-	memset(compiler->stacks, 			0, 	num_stacks * stack_size * 	sizeof(StackPtxAstIdx));
-	memset(compiler->stack_ptrs, 		0,	num_stacks * 				sizeof(StackPtxStackPtr));
-	memset(compiler->request_stack_ptrs,	0,	num_stacks * 				sizeof(StackPtxStackPtr));
-	memset(compiler->register_counters,	0, 	num_stacks *				sizeof(StackPtxRegisterCounter));
-	memset(compiler->stack_frames, 		0, 	max_frame_depth * 			sizeof(StackPtxStackFrame));
-	memset(compiler->store, 			0, 	store_size * 				sizeof(StackPtxInstruction));
+	compiler->registers = registers;
+	compiler->num_registers = num_registers;
+	compiler->routines = routines;
+	compiler->num_routines = num_routines;
 
 	*buffer_bytes_written_ret = 0;
 
