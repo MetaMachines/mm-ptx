@@ -1934,6 +1934,12 @@ stack_ptx_compile(
 	*buffer_bytes_written_ret = 0;
 
 	if (compiler->compiler_info.max_frame_depth == 0) {
+		if (buffer != NULL) {
+			if (buffer_size == 0) {
+				_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_BUFFER );
+			}
+			buffer[0] = '\0';
+		}
 		return STACK_PTX_SUCCESS;
 	}
 
