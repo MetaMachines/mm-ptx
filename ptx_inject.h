@@ -867,11 +867,14 @@ _ptx_inject_create(
                 }
                 src_ptr++;
                 break;
-            }
+	            }
 
-            if (!is_unique) {
-                if (unique_inject_site->args != NULL) {
-                    PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
+	            if (!is_unique) {
+	                if (arg_num >= unique_inject_site->num_args) {
+	                    _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+	                }
+	                if (unique_inject_site->args != NULL) {
+	                    PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
 
                     if (argument_name_length != strlen(args->name)) 
                         _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
