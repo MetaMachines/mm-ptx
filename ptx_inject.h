@@ -772,7 +772,8 @@ _ptx_inject_create(
                 _PTX_INJECT_ERROR( PTX_INJECT_ERROR_MAX_UNIQUE_INJECTS_EXCEEDED );
             }
             size_t unique_inject_idx = num_unique_injects++;
-            const char* local_names_blob = ptx_inject->names_blob + names_blob_bytes_written;
+            const char* local_names_blob =
+                ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
             _PTX_INJECT_CHECK_RET(
                 _ptx_inject_snprintf_append(
                     ptx_inject->names_blob,
@@ -902,7 +903,8 @@ _ptx_inject_create(
             } else {
                 num_unique_inject_args++;
                 unique_inject_site->num_args++;
-                const char* name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
@@ -914,7 +916,8 @@ _ptx_inject_create(
                         '\0'
                     )
                 );
-                const char* register_name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* register_name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
@@ -926,7 +929,8 @@ _ptx_inject_create(
                         '\0'
                     )
                 );
-                const char* register_type_name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* register_type_name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
@@ -938,7 +942,8 @@ _ptx_inject_create(
                         '\0'
                     )
                 );
-                const char* data_type_name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* data_type_name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
