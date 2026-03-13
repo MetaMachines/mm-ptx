@@ -1978,7 +1978,14 @@ stack_ptx_compile(
 		return STACK_PTX_SUCCESS;
 	}
 
-	if (*buffer_bytes_written_ret > buffer_size) {
+	// Guard the exact-fit cases that would otherwise leave no room to prefix the
+	// register declarations or to write the final string terminator after memmove.
+	if (*buffer_bytes_written_ret >= buffer_size) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_BUFFER );
+	}
+
+	if (register_declaration_bytes_written >= buffer_size ||
+		*buffer_bytes_written_ret >= buffer_size - register_declaration_bytes_written) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_BUFFER );
 	}
 
