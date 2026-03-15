@@ -74,6 +74,32 @@ target_link_libraries(
 add_test(NAME mm_ptx.ptx_inject_00_simple COMMAND ptx_inject_00_simple_tests)
 set_tests_properties(mm_ptx.ptx_inject_00_simple PROPERTIES SKIP_RETURN_CODE 77)
 
+add_executable(ptx_inject_inconsistent_duplicate_args_tests test_ptx_inject_inconsistent_duplicate_args.c)
+target_link_libraries(
+    ptx_inject_inconsistent_duplicate_args_tests
+    PRIVATE
+    mm_ptx_headers
+    mm_ptx_common
+)
+
+add_test(
+    NAME mm_ptx.ptx_inject_inconsistent_duplicate_args
+    COMMAND ptx_inject_inconsistent_duplicate_args_tests
+)
+
+add_executable(stack_ptx_zero_frame_depth_empty_string_tests test_stack_ptx_zero_frame_depth_empty_string.c)
+target_link_libraries(
+    stack_ptx_zero_frame_depth_empty_string_tests
+    PRIVATE
+    mm_ptx_headers
+    mm_ptx_common
+)
+
+add_test(
+    NAME mm_ptx.stack_ptx_zero_frame_depth_empty_string
+    COMMAND stack_ptx_zero_frame_depth_empty_string_tests
+)
+
 set(STACK_PTX_INJECT_00_SIMPLE_KERNEL "${PTX_INJECT_00_SIMPLE_KERNEL}")
 set(STACK_PTX_INJECT_00_SIMPLE_KERNEL_TARGET "mm_ptx_test_stack_ptx_inject_00_simple_kernel_ptx")
 

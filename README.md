@@ -167,7 +167,7 @@ If you use this software in your work, please cite it using the following BibTeX
 @software{Durham_mm-ptx_2025,
   author       = {Durham, Charlie},
   title        = {mm-ptx: PTX Inject and Stack PTX},
-  version      = {1.0.0},
+  version      = {1.1.0},
   date-released = {2025-10-19},
   url          = {https://github.com/MetaMachines/mm-ptx}
 }

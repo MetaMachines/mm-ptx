@@ -31,13 +31,13 @@
 #define STACK_PTX_H_INCLUDE
 
 #define STACK_PTX_VERSION_MAJOR 1 //!< Stack PTX major version.
-#define STACK_PTX_VERSION_MINOR 0 //!< Stack PTX minor version.
-#define STACK_PTX_VERSION_PATCH 1 //!< Stack PTX patch version.
+#define STACK_PTX_VERSION_MINOR 1 //!< Stack PTX minor version.
+#define STACK_PTX_VERSION_PATCH 0 //!< Stack PTX patch version.
 
 /**
- * \brief String representation of the Stack PTX library version (e.g., "1.0.1").
+ * \brief String representation of the Stack PTX library version (e.g., "1.1.0").
  */
-#define STACK_PTX_VERSION_STRING "1.0.1"
+#define STACK_PTX_VERSION_STRING "1.1.0"
 
 #define STACK_PTX_VERSION (STACK_PTX_VERSION_MAJOR * 10000 + STACK_PTX_VERSION_MINOR * 100 + STACK_PTX_VERSION_PATCH)
 
@@ -118,6 +118,7 @@ typedef enum {
 	STACK_PTX_INSTRUCTION_TYPE_INPUT,
 	STACK_PTX_INSTRUCTION_TYPE_SPECIAL,
 	STACK_PTX_INSTRUCTION_TYPE_META,
+	STACK_PTX_INSTRUCTION_TYPE_META_CONSTANT,
 	STACK_PTX_INSTRUCTION_TYPE_ROUTINE,
 	STACK_PTX_INSTRUCTION_TYPE_REGISTER,
 	STACK_PTX_INSTRUCTION_TYPE_AST_IDX,
@@ -138,11 +139,6 @@ typedef enum {
  * a no-op.
  */
 typedef enum {
-	/**
-	 * \brief Used to push an s32 constant on to the special meta_stack. To be used by
-	 * some meta instructions. Should be encoded with the function or macro `stack_ptx_encode_meta_constant`
-	 */
-	STACK_PTX_META_INSTRUCTION_CONSTANT,
 	/**
 	 * \brief Used to duplicate a value at the top of the respective stack. Should be encoded 
 	 * with the function or macro `stack_ptx_encode_meta`.
@@ -201,34 +197,10 @@ typedef uint32_t 	StackPtxRegisterCounter;
 typedef uint32_t 	StackPtxMetaConstant;
 typedef uint32_t 	StackPtxAstIdx;
 
-typedef size_t 		StackPtxStackIdx;
-typedef size_t 		StackPtxArgIdx;
+typedef uint16_t 	StackPtxStackIdx;
+typedef uint16_t 	StackPtxArgIdx;
 
-typedef uint16_t 	StackPtxIdx;
-typedef uint32_t 	StackPtxReturnIdx;
-
-/**
- * \brief Represents the arguments for a ptx instruction.
- *
- * \details A ptx instruction takes up to 4 arguments and can return
- * up to 2 values. Each StackPtxArgType is represented by 5 bits so that
- * this struct can be represented by 4 bytes. If the StackPtxArgType is
- * STACK_PTX_ARG_TYPE_V4_F32 then the operation on the stack will require 4
- * STACK_PTX_STACK_TYPE_F32 values as an argument or will push 4 STACK_PTX_ARG_TYPE_V4_F32
- * values as a return. This will be printed in ptx in the style of {%f0, %f1, %f2, %f3} for
- * one STACK_PTX_ARG_TYPE_V4_F32 value.
- */
-typedef struct STACK_PTX_PACKED {
-	StackPtxArgIdx arg_0 : 5;
-	StackPtxArgIdx arg_1 : 5;
-	StackPtxArgIdx arg_2 : 5;
-	StackPtxArgIdx arg_3 : 5;
-
-	StackPtxArgIdx ret_0 : 5;
-	StackPtxArgIdx ret_1 : 5;
-	bool flag_is_aligned : 1;
-	uint32_t unused : 1;
-} StackPtxPTXArgs;
+typedef uint32_t 	StackPtxIdx;
 
 /**
  * \brief A tagged union for StackPtxInstruction that is packed in 4 bytes.
@@ -238,8 +210,6 @@ typedef union STACK_PTX_PACKED {
 	int32_t s;
 	float f;
 	StackPtxMetaConstant meta_constant;
-	StackPtxPTXArgs ptx_args;
-	StackPtxArgIdx special_arg : 5;
 	StackPtxRegisterCounter reg;
 	StackPtxAstIdx ast_idx;
 } StackPtxPayload;
@@ -248,10 +218,8 @@ typedef union STACK_PTX_PACKED {
  * \brief Represents a Stack PTX instruction.
  */
 typedef struct STACK_PTX_PACKED {
-	StackPtxInstructionType instruction_type : 4;
-	StackPtxStackIdx stack_idx : 5;
-	StackPtxReturnIdx ret_idx : 7;	// Tracks AST returns with multiple values
-	StackPtxIdx idx;
+	uint16_t instruction_type;
+	uint16_t aux; // stack_idx for public stack-typed ops, ret_idx for internal return placeholders
 	StackPtxPayload payload;
 } StackPtxInstruction;
 
@@ -259,10 +227,27 @@ typedef struct STACK_PTX_PACKED {
  * \brief Represents a Stack type and how many vector elements.
  * A non-zero num_vec_elems means PTX output will include braces {}.
  */
-typedef struct {
+typedef struct STACK_PTX_PACKED {
 	StackPtxStackIdx stack_idx;
-	size_t num_vec_elems;
+	uint16_t num_vec_elems;
 } StackPtxArgTypeInfo;
+
+typedef struct STACK_PTX_PACKED {
+	StackPtxStackIdx stack_idx;
+	uint16_t num_values;
+} StackPtxPtxInstructionStackRequirement;
+
+typedef struct STACK_PTX_PACKED {
+	StackPtxArgIdx arg_types[4];
+	StackPtxArgIdx ret_types[2];
+	uint16_t num_unique_stacks;
+	bool is_aligned;
+	StackPtxPtxInstructionStackRequirement unique_stacks[4];
+} StackPtxPtxInstructionDescriptor;
+
+typedef struct STACK_PTX_PACKED {
+	StackPtxArgIdx arg_type_idx;
+} StackPtxSpecialRegisterDescriptor;
 
 /**
  * \brief Settings for the Stack PTX compiler.
@@ -280,8 +265,10 @@ typedef struct {
  */
 typedef struct {
 	const char* const* 				ptx_instruction_strings;
+	const StackPtxPtxInstructionDescriptor* ptx_instruction_descriptors;
 	size_t 							num_ptx_instructions;
 	const char* const* 				special_register_strings;
+	const StackPtxSpecialRegisterDescriptor* special_register_descriptors;
 	size_t 							num_special_registers;
 	const char* const*				stack_literal_prefixes;
 	size_t 							num_stacks;
@@ -294,7 +281,7 @@ typedef struct {
  */
 typedef struct {
 	const char* name;
-	size_t stack_idx;
+	StackPtxStackIdx stack_idx;
 } StackPtxRegister;
 
 /**
@@ -383,9 +370,60 @@ STACK_PTX_PUBLIC_DEC StackPtxResult stack_ptx_compile(
 
 // StackPtxInstruction should all fit inside 8 bytes
 STACK_PTX_STATIC_ASSERT(sizeof(StackPtxInstruction) == 8, stack_ptx_instruction_is_not_eight_bytes);
-STACK_PTX_STATIC_ASSERT(STACK_PTX_INSTRUCTION_TYPE_NUM_ENUMS < 16, stack_ptx_instruction_type_num_enums_must_fit_in_4_bits); 
+STACK_PTX_STATIC_ASSERT(STACK_PTX_INSTRUCTION_TYPE_NUM_ENUMS <= UINT16_MAX, stack_ptx_instruction_type_num_enums_must_fit_in_uint16);
+STACK_PTX_STATIC_ASSERT(STACK_PTX_META_INSTRUCTION_NUM_ENUMS <= UINT16_MAX, stack_ptx_meta_instruction_num_enums_must_fit_in_uint16);
 
-#define STACK_PTX_MAX_NUM_STACKS 32
+#define STACK_PTX_MAX_NUM_STACKS UINT16_MAX
+
+static
+inline
+StackPtxStackIdx
+_stack_ptx_instruction_stack_idx(
+	StackPtxInstruction instruction
+) {
+	return (StackPtxStackIdx)instruction.aux;
+}
+
+static
+inline
+size_t
+_stack_ptx_instruction_ret_idx(
+	StackPtxInstruction instruction
+) {
+	return (size_t)instruction.aux;
+}
+
+static
+inline
+void
+_stack_ptx_instruction_set_stack_idx(
+	StackPtxInstruction* instruction,
+	StackPtxStackIdx stack_idx
+) {
+	instruction->aux = stack_idx;
+}
+
+static
+inline
+void
+_stack_ptx_instruction_set_ret_idx(
+	StackPtxInstruction* instruction,
+	size_t ret_idx
+) {
+	instruction->aux = (uint16_t)ret_idx;
+}
+
+static
+inline
+StackPtxResult
+_stack_ptx_check_ret_idx_range(
+	size_t ret_idx
+) {
+	if (ret_idx > UINT16_MAX) {
+		return STACK_PTX_ERROR_INVALID_VALUE;
+	}
+	return STACK_PTX_SUCCESS;
+}
 
 /**
  * \brief Can modify to change default Stack PTX tabbing for output PTX.
@@ -465,6 +503,7 @@ typedef struct {
 
 	StackPtxAstIdx* stacks;
 	StackPtxStackPtr* stack_ptrs;
+	StackPtxStackPtr* request_stack_ptrs;
 
 	// Counters for registers
 	StackPtxRegisterCounter* register_counters;
@@ -480,12 +519,6 @@ typedef struct {
 	// Store/Load
 	StackPtxInstruction* store;
 } StackPtxCompiler;
-
-/**
- * \brief Defines the prefix characters for register variables declared. 
- * The maximum number of stacks is 32 so it ends at 'F';
- */
-static const char _stack_ptx_register_prefixes[] = {"abcdefghijklmnopqrstuvwxyzABCDEF"};
 
 STACK_PTX_PUBLIC_DEF
 const char*
@@ -545,6 +578,78 @@ _stack_ptx_check_arg_type_range(
 
 static
 inline
+size_t
+_stack_ptx_arg_type_num_stack_elems(
+	const StackPtxCompiler* compiler,
+	StackPtxArgIdx arg_idx
+) {
+	return STACK_PTX_MAX(compiler->stack_info.arg_type_info[arg_idx].num_vec_elems, 1);
+}
+
+static
+inline
+StackPtxResult
+_stack_ptx_get_ptx_instruction_descriptor(
+	const StackPtxCompiler* compiler,
+	StackPtxInstruction instruction,
+	StackPtxIdx* instruction_idx_out,
+	const StackPtxPtxInstructionDescriptor** descriptor_out
+) {
+	if (instruction.instruction_type != STACK_PTX_INSTRUCTION_TYPE_PTX) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
+	}
+	if (compiler->stack_info.ptx_instruction_descriptors == NULL) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_PTX_INSTRUCTION_IDX_OUT_OF_BOUNDS );
+	}
+
+	StackPtxIdx instruction_idx = instruction.payload.u;
+	if (instruction_idx >= compiler->stack_info.num_ptx_instructions) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_PTX_INSTRUCTION_IDX_OUT_OF_BOUNDS );
+	}
+
+	if (instruction_idx_out != NULL) {
+		*instruction_idx_out = instruction_idx;
+	}
+	if (descriptor_out != NULL) {
+		*descriptor_out = &compiler->stack_info.ptx_instruction_descriptors[instruction_idx];
+	}
+
+	return STACK_PTX_SUCCESS;
+}
+
+static
+inline
+StackPtxResult
+_stack_ptx_get_special_register_descriptor(
+	const StackPtxCompiler* compiler,
+	StackPtxInstruction instruction,
+	StackPtxIdx* special_register_idx_out,
+	const StackPtxSpecialRegisterDescriptor** descriptor_out
+) {
+	if (instruction.instruction_type != STACK_PTX_INSTRUCTION_TYPE_SPECIAL) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
+	}
+	if (compiler->stack_info.special_register_descriptors == NULL) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_SPECIAL_REGISTER_IDX_OUT_OF_BOUNDS );
+	}
+
+	StackPtxIdx special_register_idx = instruction.payload.u;
+	if (special_register_idx >= compiler->stack_info.num_special_registers) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_SPECIAL_REGISTER_IDX_OUT_OF_BOUNDS );
+	}
+
+	if (special_register_idx_out != NULL) {
+		*special_register_idx_out = special_register_idx;
+	}
+	if (descriptor_out != NULL) {
+		*descriptor_out = &compiler->stack_info.special_register_descriptors[special_register_idx];
+	}
+
+	return STACK_PTX_SUCCESS;
+}
+
+static
+inline
 StackPtxResult
 _stack_ptx_snprintf_append(
     char* buffer,
@@ -584,7 +689,7 @@ _stack_ptx_print_constant(
 	size_t buffer_size,
 	size_t* buffer_bytes_written_ret
 ) {
-	StackPtxStackIdx stack_idx = instruction.stack_idx;
+	StackPtxStackIdx stack_idx = _stack_ptx_instruction_stack_idx(instruction);
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 	const char* literal_prefix = compiler->stack_info.stack_literal_prefixes[stack_idx];
 
@@ -615,16 +720,15 @@ _stack_ptx_print_register(
 	size_t buffer_size,
 	size_t* buffer_bytes_written_ret
 ) {
-	StackPtxStackIdx stack_idx = instruction.stack_idx;
+	StackPtxStackIdx stack_idx = _stack_ptx_instruction_stack_idx(instruction);
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
-	char register_prefix = _stack_ptx_register_prefixes[stack_idx];
 	return _stack_ptx_snprintf_append(
 		buffer,
 		buffer_size,
 		buffer_bytes_written_ret,
-		"%%_%c%d",
-		register_prefix,
-		instruction.payload.reg
+		"%%_s%u_%u",
+		(unsigned)stack_idx,
+		(unsigned)instruction.payload.reg
 	);
 }
 
@@ -638,7 +742,7 @@ _stack_ptx_print_input(
 	size_t buffer_size,
 	size_t* buffer_bytes_written_ret
 ) {
-	StackPtxIdx registers_idx = instruction.idx;
+	StackPtxIdx registers_idx = instruction.payload.u;
 	if (registers_idx >= compiler->num_registers) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_INPUT_IDX_OUT_OF_BOUNDS );
 	}
@@ -665,15 +769,21 @@ _stack_ptx_print_special(
 	if (compiler->stack_info.special_register_strings == NULL) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_SPECIAL_REGISTER_IDX_OUT_OF_BOUNDS );
 	}
-	StackPtxArgIdx arg_idx = instruction.payload.special_arg;
+	StackPtxIdx special_register_idx;
+	const StackPtxSpecialRegisterDescriptor* descriptor;
+	_STACK_PTX_CHECK_RET(
+		_stack_ptx_get_special_register_descriptor(
+			compiler,
+			instruction,
+			&special_register_idx,
+			&descriptor
+		)
+	);
+
+	StackPtxArgIdx arg_idx = descriptor->arg_type_idx;
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
 	
 	size_t num_vec_elems = compiler->stack_info.arg_type_info[arg_idx].num_vec_elems;
-
-	StackPtxIdx special_register_idx = instruction.idx;
-	if (special_register_idx >= compiler->stack_info.num_special_registers) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_SPECIAL_REGISTER_IDX_OUT_OF_BOUNDS );
-	}
 
 	if (num_vec_elems == 0) {
 		_STACK_PTX_CHECK_RET(
@@ -696,7 +806,7 @@ _stack_ptx_print_special(
 				buffer_bytes_written_ret,
 				"%%%s.%c",
 				compiler->stack_info.special_register_strings[special_register_idx],
-				vector_accessor[instruction.ret_idx]
+					vector_accessor[_stack_ptx_instruction_ret_idx(instruction)]
 			)
 		);
 	}
@@ -716,25 +826,17 @@ _stack_ptx_ptx_instruction_num_args(
 	*num_args_flat_out = 0;
 	*num_args_out = 0;
 
-	if (instruction.instruction_type != STACK_PTX_INSTRUCTION_TYPE_PTX) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
-	}
-
-	StackPtxPTXArgs ptx_args = instruction.payload.ptx_args;
-	StackPtxArgIdx arg_type_args[STACK_PTX_MAX_NUM_PTX_ARGS];
-	arg_type_args[0] = ptx_args.arg_0;
-	arg_type_args[1] = ptx_args.arg_1;
-	arg_type_args[2] = ptx_args.arg_2;
-	arg_type_args[3] = ptx_args.arg_3;
+	const StackPtxPtxInstructionDescriptor* descriptor;
+	_STACK_PTX_CHECK_RET( _stack_ptx_get_ptx_instruction_descriptor(compiler, instruction, NULL, &descriptor) );
 
 	for (size_t arg_num = 0; arg_num < STACK_PTX_MAX_NUM_PTX_ARGS; arg_num++) {
-		StackPtxArgIdx arg_idx = arg_type_args[arg_num];
+		StackPtxArgIdx arg_idx = descriptor->arg_types[arg_num];
 		if (arg_idx == compiler->stack_info.num_arg_types) {
 			break;
 		}
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
-	
-		size_t num_stack_elems = STACK_PTX_MAX(compiler->stack_info.arg_type_info[arg_idx].num_vec_elems, 1);
+
+		size_t num_stack_elems = _stack_ptx_arg_type_num_stack_elems(compiler, arg_idx);
 		*num_args_flat_out += num_stack_elems;
 		*num_args_out += 1;
 	}
@@ -754,24 +856,18 @@ _stack_ptx_ptx_instruction_num_rets(
 	*num_rets_flat_out = 0;
 	*num_rets_out = 0;
 
-	if (instruction.instruction_type != STACK_PTX_INSTRUCTION_TYPE_PTX) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
-	}
-
-	StackPtxPTXArgs ptx_args = instruction.payload.ptx_args;
-	StackPtxArgIdx arg_type_rets[STACK_PTX_MAX_NUM_PTX_RETS];
-	arg_type_rets[0] = ptx_args.ret_0;
-	arg_type_rets[1] = ptx_args.ret_1;
+	const StackPtxPtxInstructionDescriptor* descriptor;
+	_STACK_PTX_CHECK_RET( _stack_ptx_get_ptx_instruction_descriptor(compiler, instruction, NULL, &descriptor) );
 
 	for (size_t arg_num = 0; arg_num < STACK_PTX_MAX_NUM_PTX_RETS; arg_num++) {
-		StackPtxArgIdx arg_idx = arg_type_rets[arg_num];
+		StackPtxArgIdx arg_idx = descriptor->ret_types[arg_num];
 		if (arg_idx == compiler->stack_info.num_arg_types) {
 			break;
 		}
 
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
-	
-		size_t num_stack_elems = STACK_PTX_MAX(compiler->stack_info.arg_type_info[arg_idx].num_vec_elems, 1);
+
+		size_t num_stack_elems = _stack_ptx_arg_type_num_stack_elems(compiler, arg_idx);
 		*num_rets_flat_out += num_stack_elems;
 		*num_rets_out += 1;
 	}
@@ -790,58 +886,50 @@ _stack_ptx_ast_run_ptx(
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
 	}
 
-	StackPtxPTXArgs ptx_args = instruction.payload.ptx_args;
-	StackPtxArgIdx arg_type_args[STACK_PTX_MAX_NUM_PTX_ARGS];
-	arg_type_args[0] = ptx_args.arg_0;
-	arg_type_args[1] = ptx_args.arg_1;
-	arg_type_args[2] = ptx_args.arg_2;
-	arg_type_args[3] = ptx_args.arg_3;
+	const StackPtxPtxInstructionDescriptor* descriptor;
+	_STACK_PTX_CHECK_RET( _stack_ptx_get_ptx_instruction_descriptor(compiler, instruction, NULL, &descriptor) );
 
-	StackPtxArgIdx arg_type_rets[STACK_PTX_MAX_NUM_PTX_RETS];
-	arg_type_rets[0] = ptx_args.ret_0;
-	arg_type_rets[1] = ptx_args.ret_1;
+	size_t num_args_flat, num_args_unused;
+	size_t num_rets_flat, num_rets;
+	_STACK_PTX_CHECK_RET( _stack_ptx_ptx_instruction_num_args(compiler, instruction, &num_args_flat, &num_args_unused) );
+	_STACK_PTX_CHECK_RET( _stack_ptx_ptx_instruction_num_rets(compiler, instruction, &num_rets_flat, &num_rets) );
+	(void)num_args_unused;
+	_STACK_PTX_CHECK_RET( _stack_ptx_check_ret_idx_range(num_rets_flat) );
 
-	// Make temp copy of stack pointers to iterate through arg list and make sure we can satisfy
-	// At same time, add the indices of the ast links to the ast array for the arguments
-	// We can roll back if argument counts aren't satisfied. We reset the ast_size when
-	// we roll back.
-	StackPtxAstIdx prev_ast_size = compiler->ast_size;
-	StackPtxStackPtr temp_stack_ptrs[STACK_PTX_MAX_NUM_STACKS];
-	memcpy(temp_stack_ptrs, compiler->stack_ptrs, compiler->stack_info.num_stacks * sizeof(StackPtxStackPtr));
+	for (size_t i = 0; i < descriptor->num_unique_stacks; i++) {
+		StackPtxStackIdx stack_idx = descriptor->unique_stacks[i].stack_idx;
+		_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
+		if (compiler->stack_ptrs[stack_idx] < descriptor->unique_stacks[i].num_values) {
+			return STACK_PTX_SUCCESS;
+		}
+	}
+
+	if (compiler->ast_size + num_args_flat + num_rets_flat > compiler->compiler_info.max_ast_size) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_SIZE );
+	}
+
 	for (size_t arg_num = 0; arg_num < STACK_PTX_MAX_NUM_PTX_ARGS; arg_num++) {
-		StackPtxArgIdx arg_idx = arg_type_args[arg_num];
+		StackPtxArgIdx arg_idx = descriptor->arg_types[arg_num];
 		if (arg_idx == compiler->stack_info.num_arg_types) {
 			break;
 		}
 
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
-		
+
 		StackPtxStackIdx stack_idx = compiler->stack_info.arg_type_info[arg_idx].stack_idx;
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
-		size_t num_stack_elems = STACK_PTX_MAX(compiler->stack_info.arg_type_info[arg_idx].num_vec_elems, 1);
+		size_t num_stack_elems = _stack_ptx_arg_type_num_stack_elems(compiler, arg_idx);
 		for (size_t i = 0; i < num_stack_elems; i++) {
-			if (temp_stack_ptrs[stack_idx] == 0) {
-				// Can't satisfy this instruction, bail
-				// Temp registers ensure we can roll back state by ignoring
-				compiler->ast_size = prev_ast_size;
-				return STACK_PTX_SUCCESS;
-			}
-			StackPtxStackPtr stack_ptr = --temp_stack_ptrs[stack_idx];
+			StackPtxStackPtr stack_ptr = --compiler->stack_ptrs[stack_idx];
 			StackPtxAstIdx ast_idx = compiler->stacks[stack_idx * compiler->compiler_info.stack_size + stack_ptr];
-			StackPtxInstruction ast_instruction;
+			StackPtxInstruction ast_instruction = {};
 
 			ast_instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_AST_IDX;
 			ast_instruction.payload.ast_idx = ast_idx;
 
-			if (compiler->ast_size >= compiler->compiler_info.max_ast_size) {
-				_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_SIZE );
-			}
 			compiler->ast[compiler->ast_size++] = ast_instruction;
 		}
 	}
-
-	size_t num_rets_flat, num_rets;
-	_STACK_PTX_CHECK_RET( _stack_ptx_ptx_instruction_num_rets(compiler, instruction, &num_rets_flat, &num_rets) );
 
 	// Now that we have the number of total return arguments
 	// We need to write a copy of the instruction for each of the ret args.
@@ -853,28 +941,42 @@ _stack_ptx_ast_run_ptx(
 	// the matching rewritten return register.
 	for (size_t ret_num_rev = num_rets; ret_num_rev > 0; ret_num_rev--) {
 		size_t ret_num = ret_num_rev - 1;
-		StackPtxArgIdx arg_idx = arg_type_rets[ret_num];
+		StackPtxArgIdx arg_idx = descriptor->ret_types[ret_num];
 
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
 		
 		StackPtxStackIdx stack_idx = compiler->stack_info.arg_type_info[arg_idx].stack_idx;
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
-		size_t num_stack_elems = STACK_PTX_MAX(compiler->stack_info.arg_type_info[arg_idx].num_vec_elems, 1);
+		size_t num_stack_elems = _stack_ptx_arg_type_num_stack_elems(compiler, arg_idx);
 		for (size_t i = 0; i < num_stack_elems; i++) {
-			instruction.ret_idx = num_rets_flat - ret_idx - 1;
+			_stack_ptx_instruction_set_ret_idx(&instruction, num_rets_flat - ret_idx - 1);
 			ret_idx++;
-			if (compiler->ast_size >= compiler->compiler_info.max_ast_size) {
-				_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_SIZE );
-			}
 			StackPtxAstIdx ast_idx = compiler->ast_size++;
 			compiler->ast[ast_idx] = instruction;
-			if (temp_stack_ptrs[stack_idx] < compiler->compiler_info.stack_size) {
-				StackPtxStackPtr stack_ptr = temp_stack_ptrs[stack_idx]++;
+			if (compiler->stack_ptrs[stack_idx] < compiler->compiler_info.stack_size) {
+				StackPtxStackPtr stack_ptr = compiler->stack_ptrs[stack_idx]++;
 				compiler->stacks[stack_idx * compiler->compiler_info.stack_size + stack_ptr] = ast_idx;
 			}
 		}
 	}
-	memcpy(compiler->stack_ptrs, temp_stack_ptrs, compiler->stack_info.num_stacks * sizeof(StackPtxStackPtr));
+
+	return STACK_PTX_SUCCESS;
+}
+
+static
+inline
+StackPtxResult
+_stack_ptx_ast_run_meta_constant(
+	StackPtxCompiler* compiler,
+	StackPtxInstruction instruction
+) {
+	if (instruction.instruction_type != STACK_PTX_INSTRUCTION_TYPE_META_CONSTANT) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
+	}
+
+	if (compiler->meta_stack_ptr < compiler->compiler_info.stack_size) {
+		compiler->meta_stack[compiler->meta_stack_ptr++] = instruction.payload.meta_constant;
+	}
 
 	return STACK_PTX_SUCCESS;
 }
@@ -890,20 +992,11 @@ _stack_ptx_ast_run_meta(
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
 	}
 
-	StackPtxStackIdx stack_idx = instruction.stack_idx;
+	StackPtxStackIdx stack_idx = _stack_ptx_instruction_stack_idx(instruction);
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
-	StackPtxMetaInstruction meta_idx = (StackPtxMetaInstruction)instruction.idx;
+	StackPtxMetaInstruction meta_idx = (StackPtxMetaInstruction)instruction.payload.u;
 	StackPtxStackPtr*  const meta_stack_ptr = &compiler->meta_stack_ptr;
 	StackPtxMetaConstant*  const meta_stack = compiler->meta_stack;
-
-	if (meta_idx == STACK_PTX_META_INSTRUCTION_CONSTANT) {
-		// Push a constant to the stack
-		StackPtxMetaConstant meta_u32 = instruction.payload.meta_constant;
-		if ((*meta_stack_ptr) < compiler->compiler_info.stack_size) {
-			meta_stack[(*meta_stack_ptr)++] = meta_u32;
-		}
-		return STACK_PTX_SUCCESS;
-	}
 
 	if (stack_idx >= compiler->stack_info.num_stacks) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_INVALID_VALUE );
@@ -1007,13 +1100,12 @@ _stack_ptx_ast_run_meta(
 
 				start++;
 				end--;
-			}
-			return STACK_PTX_SUCCESS;
-		};
-		case STACK_PTX_META_INSTRUCTION_CONSTANT: break; // Already handled this.
-		case STACK_PTX_META_INSTRUCTION_NUM_ENUMS: break;
-	}
-	_STACK_PTX_ERROR( STACK_PTX_ERROR_META_INSTRUCTION_IDX_OUT_OF_BOUNDS );
+				}
+				return STACK_PTX_SUCCESS;
+			};
+			case STACK_PTX_META_INSTRUCTION_NUM_ENUMS: break;
+		}
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_META_INSTRUCTION_IDX_OUT_OF_BOUNDS );
 }
 
 static
@@ -1027,9 +1119,9 @@ _stack_ptx_ast_run_store(
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
 	}
 
-	StackPtxStackIdx stack_idx = instruction.stack_idx;
+	StackPtxStackIdx stack_idx = _stack_ptx_instruction_stack_idx(instruction);
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
-	StackPtxIdx store_idx = instruction.idx;
+	StackPtxIdx store_idx = instruction.payload.u;
 
 	if (store_idx >= compiler->compiler_info.store_size) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_STORE_IDX_OUT_OF_BOUNDS );
@@ -1040,7 +1132,7 @@ _stack_ptx_ast_run_store(
 		StackPtxAstIdx ast_idx = compiler->stacks[stack_idx * compiler->compiler_info.stack_size + stack_ptr];
 		StackPtxInstruction instruction = {};
 		instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_STORE;
-		instruction.stack_idx = stack_idx;
+			_stack_ptx_instruction_set_stack_idx(&instruction, stack_idx);
 		instruction.payload.ast_idx = ast_idx;
 
 		compiler->store[store_idx] = instruction;
@@ -1060,14 +1152,14 @@ _stack_ptx_ast_run_load(
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_WRONG_TYPE_DISPATCH );
 	}
 
-	StackPtxIdx load_idx = instruction.idx;
+	StackPtxIdx load_idx = instruction.payload.u;
 
 	if (load_idx >= compiler->compiler_info.store_size) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_LOAD_IDX_OUT_OF_BOUNDS );
 	}
 
 	instruction = compiler->store[load_idx];
-	StackPtxStackIdx stack_idx = instruction.stack_idx;
+	StackPtxStackIdx stack_idx = _stack_ptx_instruction_stack_idx(instruction);
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 	if (instruction.instruction_type != STACK_PTX_INSTRUCTION_TYPE_NONE) {
 		StackPtxStackPtr* const stack_ptr = &compiler->stack_ptrs[stack_idx];
@@ -1092,8 +1184,8 @@ _stack_ptx_ast_run(
 	for (size_t step = 0; step < execution_limit; step++) {
 		StackPtxStackFrame* stack_frame = &compiler->stack_frames[compiler->frame_ptr];
 
-        StackPtxInstruction instruction = stack_frame->instructions[stack_frame->sp++];
-        StackPtxInstructionType instruction_type = instruction.instruction_type;
+		StackPtxInstruction instruction = stack_frame->instructions[stack_frame->sp++];
+		StackPtxInstructionType instruction_type = (StackPtxInstructionType)instruction.instruction_type;
 
 		switch(instruction_type) {
 			case STACK_PTX_INSTRUCTION_TYPE_RETURN: {
@@ -1102,11 +1194,12 @@ _stack_ptx_ast_run(
 				}
 			} break;
 			case STACK_PTX_INSTRUCTION_TYPE_INPUT: {
-				if (compiler->registers == NULL || instruction.idx >= compiler->num_registers) {
+				StackPtxIdx register_idx = instruction.payload.u;
+				if (compiler->registers == NULL || register_idx >= compiler->num_registers) {
 					_STACK_PTX_ERROR( STACK_PTX_ERROR_REGISTER_IDX_OUT_OF_BOUNDS );
 				}
 				// If it's an input then we grab the stack type from the declared registers.
-				StackPtxStackIdx stack_idx = compiler->registers[instruction.idx].stack_idx;
+				StackPtxStackIdx stack_idx = compiler->registers[register_idx].stack_idx;
 				_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 				if (compiler->ast_size >= compiler->compiler_info.max_ast_size) {
 					_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_SIZE );
@@ -1119,7 +1212,7 @@ _stack_ptx_ast_run(
 				}
 			} break;
 			case STACK_PTX_INSTRUCTION_TYPE_CONSTANT: {
-				StackPtxStackIdx stack_idx = instruction.stack_idx;
+					StackPtxStackIdx stack_idx = _stack_ptx_instruction_stack_idx(instruction);
 				_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 				if (compiler->ast_size >= compiler->compiler_info.max_ast_size) {
 					_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_SIZE );
@@ -1132,31 +1225,37 @@ _stack_ptx_ast_run(
 				}
 			} break;
 			case STACK_PTX_INSTRUCTION_TYPE_SPECIAL: {
-				StackPtxArgIdx arg_idx = instruction.payload.special_arg;
+				const StackPtxSpecialRegisterDescriptor* descriptor;
+				_STACK_PTX_CHECK_RET(
+					_stack_ptx_get_special_register_descriptor(compiler, instruction, NULL, &descriptor)
+				);
+				StackPtxArgIdx arg_idx = descriptor->arg_type_idx;
 				_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
-		
+
 				StackPtxStackIdx stack_idx = compiler->stack_info.arg_type_info[arg_idx].stack_idx;
 				_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
-				size_t num_stack_elems = STACK_PTX_MAX(compiler->stack_info.arg_type_info[arg_idx].num_vec_elems, 1);
+				size_t num_stack_elems = _stack_ptx_arg_type_num_stack_elems(compiler, arg_idx);
 				if (compiler->ast_size + num_stack_elems > compiler->compiler_info.max_ast_size) {
 					_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_SIZE );
 				}
 				for (size_t i = 0; i < num_stack_elems; i++) {
 					StackPtxAstIdx idx = compiler->ast_size++;
-					instruction.ret_idx = i;
+						_stack_ptx_instruction_set_ret_idx(&instruction, i);
 					compiler->ast[idx] = instruction;
 					if (compiler->stack_ptrs[stack_idx] < compiler->compiler_info.stack_size) {
 						StackPtxStackPtr stack_ptr = compiler->stack_ptrs[stack_idx]++;
 						compiler->stacks[stack_idx * compiler->compiler_info.stack_size + stack_ptr] = idx;
 					}
 				}
-
 			} break;
 			case STACK_PTX_INSTRUCTION_TYPE_PTX: {
 				_STACK_PTX_CHECK_RET( _stack_ptx_ast_run_ptx(compiler, instruction) );
 			} break;
 			case STACK_PTX_INSTRUCTION_TYPE_META: {
 				_STACK_PTX_CHECK_RET( _stack_ptx_ast_run_meta(compiler, instruction) );
+			} break;
+			case STACK_PTX_INSTRUCTION_TYPE_META_CONSTANT: {
+				_STACK_PTX_CHECK_RET( _stack_ptx_ast_run_meta_constant(compiler, instruction) );
 			} break;
 			case STACK_PTX_INSTRUCTION_TYPE_STORE: {
 				_STACK_PTX_CHECK_RET( _stack_ptx_ast_run_store(compiler, instruction) );
@@ -1169,7 +1268,7 @@ _stack_ptx_ast_run(
 					_STACK_PTX_ERROR( STACK_PTX_ERROR_ROUTINES_IDX_OUT_OF_BOUNDS );
 				}
 
-				StackPtxIdx routine_idx = instruction.idx;
+				StackPtxIdx routine_idx = instruction.payload.u;
 				if (routine_idx >= compiler->num_routines) {
 					_STACK_PTX_ERROR( STACK_PTX_ERROR_ROUTINES_IDX_OUT_OF_BOUNDS );
 				}
@@ -1190,7 +1289,7 @@ _stack_ptx_ast_run(
 			default:
 				_STACK_PTX_ERROR( STACK_PTX_ERROR_BAD_INSTRUCTION_MAYBE_FORGOT_RETURN );
 		}
-    }
+	}
 
 	return STACK_PTX_SUCCESS;
 }
@@ -1214,13 +1313,13 @@ _stack_ptx_compile_ptx(
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_PTX_INSTRUCTION_IDX_OUT_OF_BOUNDS );
 	}
 
-	StackPtxIdx instruction_idx = instruction.idx;
-	if (instruction_idx >= compiler->stack_info.num_ptx_instructions) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_PTX_INSTRUCTION_IDX_OUT_OF_BOUNDS );
-	}
-
-	const size_t ret_start_idx = ast_idx + instruction.ret_idx;
+	const size_t ret_start_idx = ast_idx + _stack_ptx_instruction_ret_idx(instruction);
 	instruction = compiler->ast[ret_start_idx];
+	StackPtxIdx instruction_idx;
+	const StackPtxPtxInstructionDescriptor* descriptor;
+	_STACK_PTX_CHECK_RET(
+		_stack_ptx_get_ptx_instruction_descriptor(compiler, instruction, &instruction_idx, &descriptor)
+	);
 
 	size_t num_args_flat, num_args, num_rets_flat, num_rets;
 	_STACK_PTX_CHECK_RET( _stack_ptx_ptx_instruction_num_args(compiler, instruction, &num_args_flat, &num_args) );
@@ -1276,16 +1375,6 @@ _stack_ptx_compile_ptx(
 		return STACK_PTX_SUCCESS;
 	}
 
-	StackPtxPTXArgs ptx_args = instruction.payload.ptx_args;
-	StackPtxArgIdx arg_type_args[STACK_PTX_MAX_NUM_PTX_ARGS];
-	arg_type_args[0] = ptx_args.arg_0;
-	arg_type_args[1] = ptx_args.arg_1;
-	arg_type_args[2] = ptx_args.arg_2;
-	arg_type_args[3] = ptx_args.arg_3;
-	StackPtxArgIdx arg_type_rets[STACK_PTX_MAX_NUM_PTX_RETS];
-	arg_type_rets[0] = ptx_args.ret_0;
-	arg_type_rets[1] = ptx_args.ret_1;
-
 	_STACK_PTX_CHECK_RET(
 		_stack_ptx_snprintf_append(
 			buffer,
@@ -1299,13 +1388,13 @@ _stack_ptx_compile_ptx(
 	// Start printing out ptx assembly string
 	size_t ret_ast_idx = 0;
 	for (size_t arg_num = 0; arg_num < num_rets; arg_num++) {
-		StackPtxArgIdx arg_idx = arg_type_rets[arg_num];
+		StackPtxArgIdx arg_idx = descriptor->ret_types[arg_num];
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
 		
 		StackPtxStackIdx stack_idx = compiler->stack_info.arg_type_info[arg_idx].stack_idx;
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 		size_t num_vec_elems = compiler->stack_info.arg_type_info[arg_idx].num_vec_elems;
-		size_t num_stack_elems = STACK_PTX_MAX(num_vec_elems, 1);
+		size_t num_stack_elems = _stack_ptx_arg_type_num_stack_elems(compiler, arg_idx);
 
 		if (arg_num > 0) {
 			_STACK_PTX_CHECK_RET(
@@ -1328,13 +1417,11 @@ _stack_ptx_compile_ptx(
 			);
 		}
 		for (size_t i = 0; i < num_stack_elems; i++) {
-			StackPtxInstruction this_ret_instruction;
+			StackPtxInstruction this_ret_instruction = {};
 
-			this_ret_instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_REGISTER;
-			this_ret_instruction.stack_idx = stack_idx;
-			this_ret_instruction.ret_idx = 0;
-			this_ret_instruction.idx = 0;
-			this_ret_instruction.payload.reg = compiler->register_counters[stack_idx]++;
+				this_ret_instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_REGISTER;
+				_stack_ptx_instruction_set_stack_idx(&this_ret_instruction, stack_idx);
+				this_ret_instruction.payload.reg = compiler->register_counters[stack_idx]++;
 
 			if (i != 0) {
 				_STACK_PTX_CHECK_RET(
@@ -1374,11 +1461,11 @@ _stack_ptx_compile_ptx(
 
 	size_t arg_ast_idx = 0;
 	for (size_t i = 0; i < num_args; i++) {
-		StackPtxArgIdx arg_idx = arg_type_args[i];
+		StackPtxArgIdx arg_idx = descriptor->arg_types[i];
 
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
 		size_t num_vec_elems = compiler->stack_info.arg_type_info[arg_idx].num_vec_elems;
-		size_t num_stack_elems = STACK_PTX_MAX(num_vec_elems, 1);
+		size_t num_stack_elems = _stack_ptx_arg_type_num_stack_elems(compiler, arg_idx);
 		const char* maybe_vector_start_bracket = num_vec_elems > 0 ? "\n\t\t{" : "";
 		const char* maybe_vector_end_bracket = num_vec_elems > 0 ? "}" : "";
 
@@ -1463,18 +1550,20 @@ _stack_ptx_compile_special(
 	size_t buffer_size,
 	size_t* buffer_bytes_written_ret
 ) {
-	
-	StackPtxArgIdx arg_idx = instruction.payload.special_arg;
+	const StackPtxSpecialRegisterDescriptor* descriptor;
+	_STACK_PTX_CHECK_RET(
+		_stack_ptx_get_special_register_descriptor(compiler, instruction, NULL, &descriptor)
+	);
+
+	StackPtxArgIdx arg_idx = descriptor->arg_type_idx;
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_arg_type_range(compiler, arg_idx) );
-		
+
 	StackPtxStackIdx stack_idx = compiler->stack_info.arg_type_info[arg_idx].stack_idx;
 	_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 
-	StackPtxInstruction this_register_instruction;
+	StackPtxInstruction this_register_instruction = {};
 	this_register_instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_REGISTER;
-	this_register_instruction.stack_idx = stack_idx;
-	this_register_instruction.ret_idx = 0;
-	this_register_instruction.idx = 0;
+	_stack_ptx_instruction_set_stack_idx(&this_register_instruction, stack_idx);
 	this_register_instruction.payload.reg = compiler->register_counters[stack_idx]++;
 
 	const char* literal_prefix = compiler->stack_info.stack_literal_prefixes[stack_idx];
@@ -1542,14 +1631,18 @@ _stack_ptx_compile(
 	size_t buffer_size,
 	size_t* buffer_bytes_written_ret
 ) {
-	StackPtxStackPtr temp_stack_ptrs[STACK_PTX_MAX_NUM_STACKS];
-	memcpy(temp_stack_ptrs, compiler->stack_ptrs, compiler->stack_info.num_stacks * sizeof(StackPtxStackPtr));
+	memcpy(
+		compiler->request_stack_ptrs,
+		compiler->stack_ptrs,
+		compiler->stack_info.num_stacks * sizeof(StackPtxStackPtr)
+	);
+
 	for (size_t i = 0; i < num_requests; i++) {
 		StackPtxStackIdx stack_idx = compiler->registers[requests[i]].stack_idx;
 		_STACK_PTX_CHECK_RET( _stack_ptx_check_stack_type_range(compiler, stack_idx) );
 
-		if (temp_stack_ptrs[stack_idx] > 0) {
-			StackPtxStackPtr stack_ptr = --temp_stack_ptrs[stack_idx];
+		if (compiler->request_stack_ptrs[stack_idx] > 0) {
+			StackPtxStackPtr stack_ptr = --compiler->request_stack_ptrs[stack_idx];
 			StackPtxAstIdx ast_idx = compiler->stacks[stack_idx * compiler->compiler_info.stack_size + stack_ptr];
 			if (compiler->ast_to_visit_stack_ptr >= compiler->compiler_info.max_ast_to_visit_stack_depth) {
 				_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_AST_VISIT_SIZE );
@@ -1674,13 +1767,12 @@ _stack_ptx_write_register_declaration(
 		StackPtxRegisterCounter reg = compiler->register_counters[stack_idx];
 		if (reg == 0) continue;
 		const char* literal_prefix = compiler->stack_info.stack_literal_prefixes[stack_idx];
-		char register_prefix = _stack_ptx_register_prefixes[stack_idx];
 		_STACK_PTX_CHECK_RET(
 			_stack_ptx_snprintf_append(buffer, buffer_size, buffer_bytes_written_ret,
-				STACK_PTX_TABBING ".reg .%s %%_%c<%d>;\n",
+				STACK_PTX_TABBING ".reg .%s %%_s%u_<%u>;\n",
 				literal_prefix,
-				register_prefix,
-				reg
+				(unsigned)stack_idx,
+				(unsigned)reg
 			)
 		);
 	}
@@ -1688,43 +1780,115 @@ _stack_ptx_write_register_declaration(
 	return STACK_PTX_SUCCESS;
 }
 
-STACK_PTX_PUBLIC_DEF 
-StackPtxResult 
+static
+inline
+StackPtxResult
+_stack_ptx_setup_compiler_workspace(
+	const StackPtxCompilerInfo* compiler_info_ref,
+	const StackPtxStackInfo* stack_info_ref,
+	void* workspace,
+	size_t workspace_in_bytes,
+	size_t* workspace_in_bytes_out,
+	StackPtxCompiler** compiler_out
+) {
+	const size_t max_ast_size = compiler_info_ref->max_ast_size;
+	const size_t max_ast_to_visit_stack_depth = compiler_info_ref->max_ast_to_visit_stack_depth;
+	const size_t stack_size = compiler_info_ref->stack_size;
+	const size_t max_frame_depth = compiler_info_ref->max_frame_depth;
+	const size_t num_stacks = stack_info_ref->num_stacks;
+	const size_t store_size = compiler_info_ref->store_size;
+
+	const size_t compiler_num_bytes = 			sizeof(StackPtxCompiler);
+	const size_t ast_num_bytes = 				max_ast_size * sizeof(StackPtxInstruction);
+	const size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * sizeof(StackPtxAstIdx);
+	const size_t stacks_num_bytes = 			num_stacks * stack_size * sizeof(StackPtxAstIdx);
+	const size_t stack_ptrs_num_bytes = 		num_stacks * sizeof(StackPtxStackPtr);
+	const size_t request_stack_ptrs_num_bytes = num_stacks * sizeof(StackPtxStackPtr);
+	const size_t register_counters_num_bytes = 	num_stacks * sizeof(StackPtxRegisterCounter);
+	const size_t meta_stack_num_bytes = 		stack_size * sizeof(StackPtxMetaConstant);
+	const size_t stack_frames_num_bytes = 		max_frame_depth * sizeof(StackPtxStackFrame);
+	const size_t store_num_bytes = 				store_size * sizeof(StackPtxInstruction);
+
+	const size_t compiler_offset = 				0;
+	const size_t ast_offset =					compiler_offset + 					_STACK_PTX_ALIGNMENT_UP(compiler_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t ast_to_visit_offset =			ast_offset + 						_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t stacks_offset =				ast_to_visit_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t stack_ptrs_offset =			stacks_offset + 					_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t request_stack_ptrs_offset =    stack_ptrs_offset + 				_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t register_counters_offset = 	request_stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(request_stack_ptrs_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t meta_stack_offset =			register_counters_offset + 			_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t stack_frames_offset =			meta_stack_offset + 				_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t store_offset =					stack_frames_offset +				_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes, _STACK_PTX_ALIGNMENT);
+	const size_t total_size = 					store_offset + store_num_bytes + 	_STACK_PTX_ALIGNMENT;
+
+	if (workspace_in_bytes_out != NULL) {
+		*workspace_in_bytes_out = total_size;
+	}
+
+	if (compiler_out == NULL) {
+		return STACK_PTX_SUCCESS;
+	}
+
+	*compiler_out = NULL;
+
+	if (workspace == NULL) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_INVALID_VALUE );
+	}
+
+	if (total_size > workspace_in_bytes) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_WORKSPACE );
+	}
+
+	const uintptr_t address = (uintptr_t)workspace;
+	const uintptr_t aligned_address = _STACK_PTX_ALIGNMENT_UP(address, _STACK_PTX_ALIGNMENT);
+	void* const aligned_workspace = (void*)aligned_address;
+
+	StackPtxCompiler* const compiler = (StackPtxCompiler*)((char*)aligned_workspace + compiler_offset);
+
+	compiler->compiler_info = 						*compiler_info_ref;
+	compiler->stack_info = 							*stack_info_ref;
+	compiler->ast = 								(StackPtxInstruction*)((char*)aligned_workspace + ast_offset);
+	compiler->ast_size = 							0;
+	compiler->ast_to_visit_stack = 					(StackPtxAstIdx*)((char*)aligned_workspace + ast_to_visit_offset);
+	compiler->ast_to_visit_stack_max_depth_usage = 	0;
+	compiler->ast_to_visit_stack_ptr = 				0;
+	compiler->stacks = 								(StackPtxAstIdx*)((char*)aligned_workspace + stacks_offset);
+	compiler->stack_ptrs = 							(StackPtxStackPtr*)((char*)aligned_workspace + stack_ptrs_offset);
+	compiler->request_stack_ptrs = 					(StackPtxStackPtr*)((char*)aligned_workspace + request_stack_ptrs_offset);
+	compiler->register_counters = 					(StackPtxRegisterCounter*)((char*)aligned_workspace + register_counters_offset);
+	compiler->meta_stack = 							(StackPtxMetaConstant*)((char*)aligned_workspace + meta_stack_offset);
+	compiler->meta_stack_ptr = 						0;
+	compiler->stack_frames = 						(StackPtxStackFrame*)((char*)aligned_workspace + stack_frames_offset);
+	compiler->frame_ptr = 							0;
+	compiler->store = 								(StackPtxInstruction*)((char*)aligned_workspace + store_offset);
+
+	memset(compiler->stacks, 0, stacks_num_bytes);
+	memset(compiler->stack_ptrs, 0, stack_ptrs_num_bytes);
+	memset(compiler->request_stack_ptrs, 0, request_stack_ptrs_num_bytes);
+	memset(compiler->register_counters, 0, register_counters_num_bytes);
+	memset(compiler->stack_frames, 0, stack_frames_num_bytes);
+	memset(compiler->store, 0, store_num_bytes);
+
+	*compiler_out = compiler;
+
+	return STACK_PTX_SUCCESS;
+}
+
+STACK_PTX_PUBLIC_DEF
+StackPtxResult
 stack_ptx_compile_workspace_size(
 	const StackPtxCompilerInfo* compiler_info_ref,
 	const StackPtxStackInfo* stack_info_ref,
 	size_t* workspace_in_bytes_out
 ) {
-	size_t max_ast_size = compiler_info_ref->max_ast_size;
-	size_t max_ast_to_visit_stack_depth = compiler_info_ref->max_ast_to_visit_stack_depth;
-	size_t stack_size = compiler_info_ref->stack_size;
-	size_t max_frame_depth = compiler_info_ref->max_frame_depth;
-	size_t num_stacks = stack_info_ref->num_stacks;
-	size_t store_size = compiler_info_ref->store_size;
-
-	size_t compiler_num_bytes = 											sizeof(StackPtxCompiler);
-    size_t ast_num_bytes = 					max_ast_size * 					sizeof(StackPtxInstruction);
-    size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * 	sizeof(StackPtxAstIdx);
-	size_t stacks_num_bytes = 				num_stacks * stack_size * 		sizeof(StackPtxAstIdx);
-	size_t stack_ptrs_num_bytes = 			num_stacks * 					sizeof(StackPtxStackPtr);
-	size_t register_counters_num_bytes =	num_stacks * 					sizeof(StackPtxRegisterCounter);
-	size_t meta_stack_num_bytes = 			stack_size * 					sizeof(StackPtxMetaConstant);
-	size_t stack_frames_num_bytes = 		max_frame_depth * 				sizeof(StackPtxStackFrame);
-	size_t store_num_bytes =				store_size *					sizeof(StackPtxInstruction);
-
-	size_t compiler_offset = 0;
-	size_t ast_offset = 				compiler_offset + 			_STACK_PTX_ALIGNMENT_UP(compiler_num_bytes, 			_STACK_PTX_ALIGNMENT);
-	size_t ast_to_visit_offset = 		ast_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, 					_STACK_PTX_ALIGNMENT);
-	size_t stacks_offset =				ast_to_visit_offset + 		_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t stack_ptrs_offset =			stacks_offset +				_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes,				_STACK_PTX_ALIGNMENT);
-	size_t register_counters_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t meta_stack_offset =			register_counters_offset +	_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes,	_STACK_PTX_ALIGNMENT);
-	size_t stack_frames_offset =		meta_stack_offset +			_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t store_offset =				stack_frames_offset +		_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes,			_STACK_PTX_ALIGNMENT);
-
-	size_t total_size = 			store_offset + store_num_bytes + _STACK_PTX_ALIGNMENT;
-
-	*workspace_in_bytes_out = total_size;
+	_STACK_PTX_CHECK_RET( _stack_ptx_setup_compiler_workspace(
+		compiler_info_ref,
+		stack_info_ref,
+		NULL,
+		0,
+		workspace_in_bytes_out,
+		NULL
+	) );
 
 	return STACK_PTX_SUCCESS;
 }
@@ -1733,107 +1897,49 @@ STACK_PTX_PUBLIC_DEF
 StackPtxResult
 stack_ptx_compile(
 	const StackPtxCompilerInfo* compiler_info_ref,
-	const StackPtxStackInfo* 	stack_info_ref,
-    const StackPtxInstruction* 	instructions,
-	const StackPtxRegister* 	registers,
-	size_t 						num_registers,
+	const StackPtxStackInfo* stack_info_ref,
+	const StackPtxInstruction* instructions,
+	const StackPtxRegister* registers,
+	size_t num_registers,
 	const StackPtxInstruction** routines,
-	size_t 						num_routines,
-	const size_t* 				requests,
-    size_t 						num_requests,
-	size_t 						execution_limit,
-	void* 						workspace,
-	size_t 						workspace_in_bytes,
-	char* 						buffer,
-	size_t 						buffer_size,
-	size_t* 					buffer_bytes_written_ret
+	size_t num_routines,
+	const size_t* requests,
+	size_t num_requests,
+	size_t execution_limit,
+	void* workspace,
+	size_t workspace_in_bytes,
+	char* buffer,
+	size_t buffer_size,
+	size_t* buffer_bytes_written_ret
 ) {
-	if (workspace == NULL) {
+	if (stack_info_ref->num_stacks > STACK_PTX_MAX_NUM_STACKS) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_INVALID_VALUE );
 	}
 
-	if (stack_info_ref->num_stacks > STACK_PTX_MAX_NUM_STACKS || stack_info_ref->num_arg_types > STACK_PTX_MAX_NUM_STACKS) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_INVALID_VALUE );
-	}
+	StackPtxCompiler* compiler = NULL;
+	_STACK_PTX_CHECK_RET( _stack_ptx_setup_compiler_workspace(
+		compiler_info_ref,
+		stack_info_ref,
+		workspace,
+		workspace_in_bytes,
+		NULL,
+		&compiler
+	) );
 
-	size_t max_ast_size = compiler_info_ref->max_ast_size;
-	size_t max_ast_to_visit_stack_depth = compiler_info_ref->max_ast_to_visit_stack_depth;
-	size_t stack_size = compiler_info_ref->stack_size;
-	size_t max_frame_depth = compiler_info_ref->max_frame_depth;
-	size_t num_stacks = stack_info_ref->num_stacks;
-	size_t store_size = compiler_info_ref->store_size;
-
-	size_t compiler_num_bytes = 											sizeof(StackPtxCompiler);
-    size_t ast_num_bytes = 					max_ast_size * 					sizeof(StackPtxInstruction);
-    size_t ast_to_visit_num_bytes = 		max_ast_to_visit_stack_depth * 	sizeof(StackPtxAstIdx);
-	size_t stacks_num_bytes = 				num_stacks * stack_size * 		sizeof(StackPtxAstIdx);
-	size_t stack_ptrs_num_bytes = 			num_stacks * 					sizeof(StackPtxStackPtr);
-	size_t register_counters_num_bytes =	num_stacks * 					sizeof(StackPtxRegisterCounter);
-	size_t meta_stack_num_bytes = 			stack_size * 					sizeof(StackPtxMetaConstant);
-	size_t stack_frames_num_bytes = 		max_frame_depth * 				sizeof(StackPtxStackFrame);
-	size_t store_num_bytes =				store_size *					sizeof(StackPtxInstruction);
-
-	size_t compiler_offset = 0;
-	size_t ast_offset = 				compiler_offset + 			_STACK_PTX_ALIGNMENT_UP(compiler_num_bytes, 			_STACK_PTX_ALIGNMENT);
-	size_t ast_to_visit_offset = 		ast_offset + 				_STACK_PTX_ALIGNMENT_UP(ast_num_bytes, 					_STACK_PTX_ALIGNMENT);
-	size_t stacks_offset =				ast_to_visit_offset + 		_STACK_PTX_ALIGNMENT_UP(ast_to_visit_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t stack_ptrs_offset =			stacks_offset +				_STACK_PTX_ALIGNMENT_UP(stacks_num_bytes,				_STACK_PTX_ALIGNMENT);
-	size_t register_counters_offset =	stack_ptrs_offset + 		_STACK_PTX_ALIGNMENT_UP(stack_ptrs_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t meta_stack_offset =			register_counters_offset +	_STACK_PTX_ALIGNMENT_UP(register_counters_num_bytes,	_STACK_PTX_ALIGNMENT);
-	size_t stack_frames_offset =		meta_stack_offset +			_STACK_PTX_ALIGNMENT_UP(meta_stack_num_bytes,			_STACK_PTX_ALIGNMENT);
-	size_t store_offset =				stack_frames_offset +		_STACK_PTX_ALIGNMENT_UP(stack_frames_num_bytes,			_STACK_PTX_ALIGNMENT);
-
-	size_t total_size = 			store_offset + store_num_bytes + _STACK_PTX_ALIGNMENT;
-
-	if (total_size > workspace_in_bytes) {
-		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_WORKSPACE );
-	}
-
-	// Find the first address in workspace that is aligned to our requirement.
-	uintptr_t address = (uintptr_t)workspace;
-	uintptr_t aligned_address = _STACK_PTX_ALIGNMENT_UP(address, _STACK_PTX_ALIGNMENT);
-
-	workspace = (void*)aligned_address;
-
-	StackPtxCompiler* compiler = 					(StackPtxCompiler*)((char*)workspace + compiler_offset);
-
-	compiler->compiler_info = 						*compiler_info_ref;
-	compiler->stack_info =							*stack_info_ref;
-
-	compiler->registers = 							registers;
-	compiler->num_registers = 						num_registers;
-	compiler->routines = 							routines;
-	compiler->num_routines = 						num_routines;
-	
-	compiler->ast = 								(StackPtxInstruction*)((char*)workspace + ast_offset);
-	compiler->ast_size = 							0;
-
-	compiler->ast_to_visit_stack = 					(StackPtxAstIdx*)((char*)workspace + ast_to_visit_offset);
-	compiler->ast_to_visit_stack_max_depth_usage = 	0;
-	compiler->ast_to_visit_stack_ptr = 				0;
-
-	compiler->stacks =								(StackPtxAstIdx*)((char*)workspace + stacks_offset);
-	compiler->stack_ptrs = 							(StackPtxStackPtr*)((char*)workspace + stack_ptrs_offset);
-
-	compiler->register_counters = 					(StackPtxRegisterCounter*)((char*)workspace + register_counters_offset);
-
-	compiler->meta_stack = 							(StackPtxMetaConstant*)((char*)workspace + meta_stack_offset);
-	compiler->meta_stack_ptr = 						0;
-
-	compiler->stack_frames = 						(StackPtxStackFrame*)((char*)workspace + stack_frames_offset);
-	compiler->frame_ptr = 							0;
-
-	compiler->store =								(StackPtxInstruction*)((char*)workspace + store_offset);
-
-	memset(compiler->stacks, 			0, 	num_stacks * stack_size * 	sizeof(StackPtxAstIdx));
-	memset(compiler->stack_ptrs, 		0,	num_stacks * 				sizeof(StackPtxStackPtr));
-	memset(compiler->register_counters,	0, 	num_stacks *				sizeof(StackPtxRegisterCounter));
-	memset(compiler->stack_frames, 		0, 	max_frame_depth * 			sizeof(StackPtxStackFrame));
-	memset(compiler->store, 			0, 	store_size * 				sizeof(StackPtxInstruction));
+	compiler->registers = registers;
+	compiler->num_registers = num_registers;
+	compiler->routines = routines;
+	compiler->num_routines = num_routines;
 
 	*buffer_bytes_written_ret = 0;
 
 	if (compiler->compiler_info.max_frame_depth == 0) {
+		if (buffer != NULL) {
+			if (buffer_size == 0) {
+				_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_BUFFER );
+			}
+			buffer[0] = '\0';
+		}
 		return STACK_PTX_SUCCESS;
 	}
 
@@ -1878,7 +1984,14 @@ stack_ptx_compile(
 		return STACK_PTX_SUCCESS;
 	}
 
-	if (*buffer_bytes_written_ret > buffer_size) {
+	// Guard the exact-fit cases that would otherwise leave no room to prefix the
+	// register declarations or to write the final string terminator after memmove.
+	if (*buffer_bytes_written_ret >= buffer_size) {
+		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_BUFFER );
+	}
+
+	if (register_declaration_bytes_written >= buffer_size ||
+		*buffer_bytes_written_ret >= buffer_size - register_declaration_bytes_written) {
 		_STACK_PTX_ERROR( STACK_PTX_ERROR_INSUFFICIENT_BUFFER );
 	}
 

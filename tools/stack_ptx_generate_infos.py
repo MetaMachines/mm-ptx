@@ -127,18 +127,20 @@ def _normalize_and_validate(raw: Dict[str, Any]) -> Spec:
             constant_type=constant_type,
             encoder_type=encoder_type
         ))
-    _require(len(stack_types) <= 32, f"Too many stack_types ({len(stack_types)} > 32)")
+    _require(len(stack_types) <= ((1 << 16) - 1), f"Too many stack_types ({len(stack_types)} > 65535)")
     _unique_names(stack_types, "name", "stack_type")
     stack_names = {st.name for st in stack_types}
 
     # arg types
     arg_types = [ArgType(at["name"], at["stack_type"], int(at.get("num_vec_elems", 0))) for at in raw["arg_types"]]
-    _require(len(arg_types) <= 32, f"Too many arg_types ({len(arg_types)} > 32)")
+    _require(len(arg_types) <= ((1 << 16) - 1), f"Too many arg_types ({len(arg_types)} > 65535)")
     _unique_names(arg_types, "name", "arg_type")
     for at in arg_types:
         _require(at.stack_type in stack_names, f"ArgType '{at.name}' references unknown stack_type '{at.stack_type}'")
         _require(at.num_vec_elems >= 0, f"ArgType '{at.name}' must have num_vec_elems >= 0")
+        _require(at.num_vec_elems <= ((1 << 16) - 1), f"ArgType '{at.name}' num_vec_elems exceeds 65535")
     arg_names = {a.name for a in arg_types}
+    arg_type_lookup = {at.name: at for at in arg_types}
 
     # instructions
     instructions: List[Instruction] = []
@@ -154,6 +156,8 @@ def _normalize_and_validate(raw: Dict[str, Any]) -> Spec:
             _require(a in arg_names, f"Instruction '{ptx}' references unknown arg type '{a}'")
         for r in rets:
             _require(r in arg_names, f"Instruction '{ptx}' returns unknown arg type '{r}'")
+        ret_stack_elems = sum(max(arg_type_lookup[r].num_vec_elems, 1) for r in rets)
+        _require(ret_stack_elems <= ((1 << 16) - 1), f"Instruction '{ptx}' returns too many stack elems ({ret_stack_elems} > 65535)")
         aligned = _to_bool(ins.get("aligned", False))
         display = ins.get("display", ptx)
         instructions.append(Instruction(
@@ -216,17 +220,34 @@ def _payload_field_for_constant_type(constant_type: str) -> str:
 def _ctype_for_constant_type(constant_type: str) -> str:
     return _CONSTANT_TYPE_INFO[constant_type][1]
 
-def _build_indices(spec: Dict[str, Any]):
-    # name -> index mapping (ordered as provided)
-    st_ix = {st["name"]: i for i, st in enumerate(spec["stack_types"])}
-    at_ix = {at["name"]: i for i, at in enumerate(spec["arg_types"])}
-    return st_ix, at_ix
-
 def _pad_args(arg_names: List[str], pad_to: int, sentinel: str) -> List[str]:
     out = list(arg_names)
     while len(out) < pad_to:
         out.append(sentinel)
     return out[:pad_to]
+
+def _build_arg_type_lookup(spec: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    return {at["name"]: at for at in spec["arg_types"]}
+
+def _stack_elems_for_arg(arg_type: Dict[str, Any]) -> int:
+    return max(int(arg_type["num_vec_elems"]), 1)
+
+def _build_ptx_unique_stack_reqs(spec: Dict[str, Any], instruction: Dict[str, Any]) -> List[tuple[str, int]]:
+    arg_types = _build_arg_type_lookup(spec)
+    reqs: List[tuple[str, int]] = []
+    reqs_by_stack: Dict[str, int] = {}
+    for arg_name in instruction["args"]:
+        arg_type = arg_types[arg_name]
+        stack_name = arg_type["stack_type"]
+        stack_elems = _stack_elems_for_arg(arg_type)
+        req_idx = reqs_by_stack.get(stack_name)
+        if req_idx is None:
+            reqs_by_stack[stack_name] = len(reqs)
+            reqs.append((stack_name, stack_elems))
+            continue
+        prev_stack_name, prev_count = reqs[req_idx]
+        reqs[req_idx] = (prev_stack_name, prev_count + stack_elems)
+    return reqs
 
 def gen_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
@@ -240,8 +261,6 @@ def _gen_c_header(
         spec: Dict[str, Any],
         in_json_path: str
 ) -> str:
-    st_ix, at_ix = _build_indices(spec)
-
     # Enums
     c = []
     append = c.append
@@ -262,82 +281,72 @@ def _gen_c_header(
     append("#define STACK_PTX_ARRAY_NUM_ELEMS(array) sizeof((array)) / sizeof(*(array))\n\n")
 
     # Macros mirroring your sample
-    append(r"""#define _STACK_PTX_ENCODE_META(MI,ST,c) {					\
+    append(r"""#define _STACK_PTX_ENCODE_META(MI,ST) {					\
 	.instruction_type=STACK_PTX_INSTRUCTION_TYPE_META,		\
-	.stack_idx=(ST),										\
-	.idx=(MI),												\
+	.aux=(ST),												\
+	.payload={.u=(MI)}										\
+}
+""")
+    append(r"""#define _STACK_PTX_ENCODE_META_CONSTANT(c) {				\
+	.instruction_type=STACK_PTX_INSTRUCTION_TYPE_META_CONSTANT, \
+	.aux=0,													\
 	.payload={.meta_constant=(c)}							\
 }
 """)
-    append(r"""#define _STACK_PTX_ENCODE_PTX_INSTRUCTION(IDX, ARG_0, ARG_1, ARG_2, ARG_3, RET_0, RET_1, ALIGNED) { \
+    append(r"""#define _STACK_PTX_ENCODE_PTX_INSTRUCTION(IDX) { \
 	.instruction_type = STACK_PTX_INSTRUCTION_TYPE_PTX, \
-	.stack_idx = 0, \
-	.idx = (IDX), \
-	.payload={.ptx_args = { \
-		.arg_0 = (ARG_0), \
-		.arg_1 = (ARG_1), \
-		.arg_2 = (ARG_2), \
-		.arg_3 = (ARG_3), \
-		.ret_0 = (RET_0), \
-		.ret_1 = (RET_1), \
-		.flag_is_aligned = (ALIGNED), \
-	}} \
+	.aux = 0, \
+	.payload={.u = (IDX)} \
 }
 """)
-    append(r"""#define _STACK_PTX_ENCODE_SPECIAL_REGISTER(IDX, ARG) { 		\
+    append(r"""#define _STACK_PTX_ENCODE_SPECIAL_REGISTER(IDX) { 		\
 	.instruction_type = STACK_PTX_INSTRUCTION_TYPE_SPECIAL, \
-	.stack_idx = 0, \
-	.idx = (IDX), \
-	.payload={.special_arg = (ARG)} \
+	.aux = 0, \
+	.payload={.u = (IDX)} \
 }
 """)
     # meta + common encoders
     append(r"""#define stack_ptx_encode_input(IDX) {	                \
 	.instruction_type=STACK_PTX_INSTRUCTION_TYPE_INPUT,		\
-	.stack_idx=0,				                            \
-	.idx=(IDX),						                        \
-	.payload={0}			                                \
+	.aux=0,				                                    \
+	.payload={.u=(IDX)}			                            \
 }
 """)
     append(r"""#define stack_ptx_encode_return {							\
 	.instruction_type=STACK_PTX_INSTRUCTION_TYPE_RETURN,	\
-	.stack_idx=0,					                        \
-	.idx=0,													\
+	.aux=0,						                            \
 	.payload={0}											\
 }
 """)
     append(r"""#define stack_ptx_encode_routine(IDX) {						\
 	.instruction_type=STACK_PTX_INSTRUCTION_TYPE_ROUTINE,	\
-	.stack_idx=0,					                        \
-	.idx=(IDX),												\
-	.payload={0}											\
+	.aux=0,						                            \
+	.payload={.u=(IDX)}										\
 }
 """)
     append(r"""#define stack_ptx_encode_store(ST,IDX) {                    \
     .instruction_type=STACK_PTX_INSTRUCTION_TYPE_STORE,     \
-    .stack_idx=(ST),                                        \
-    .idx=(IDX),                                             \
-    .payload={0}                                            \
+    .aux=(ST),                                              \
+    .payload={.u=(IDX)}                                     \
 }
 """)
     append(r"""#define stack_ptx_encode_load(IDX) {                        \
     .instruction_type=STACK_PTX_INSTRUCTION_TYPE_LOAD,      \
-    .stack_idx=0,                                           \
-    .idx=(IDX),                                             \
-    .payload={0}                                            \
+    .aux=0,                                                 \
+    .payload={.u=(IDX)}                                     \
 }
 """)
     
-    append("#define stack_ptx_encode_meta_constant(c)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_CONSTANT, 0, c)\n")
-    append("#define stack_ptx_encode_meta_dup(ST) 		_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_DUP, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_yank_dup(ST) 	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_YANK_DUP, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_swap(ST) 		_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_SWAP, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_swap_with(ST) _STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_SWAP_WITH, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_replace(ST) 	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_REPLACE, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_drop(ST)		_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_DROP, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_clear(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_CLEAR, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_rotate(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_ROTATE, ST, 0)\n")
-    append("#define stack_ptx_encode_meta_reverse(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_REVERSE, ST, 0)\n\n")
+    append("#define stack_ptx_encode_meta_constant(c)	_STACK_PTX_ENCODE_META_CONSTANT(c)\n")
+    append("#define stack_ptx_encode_meta_dup(ST) 		_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_DUP, ST)\n")
+    append("#define stack_ptx_encode_meta_yank_dup(ST) 	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_YANK_DUP, ST)\n")
+    append("#define stack_ptx_encode_meta_swap(ST) 		_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_SWAP, ST)\n")
+    append("#define stack_ptx_encode_meta_swap_with(ST) _STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_SWAP_WITH, ST)\n")
+    append("#define stack_ptx_encode_meta_replace(ST) 	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_REPLACE, ST)\n")
+    append("#define stack_ptx_encode_meta_drop(ST)		_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_DROP, ST)\n")
+    append("#define stack_ptx_encode_meta_clear(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_CLEAR, ST)\n")
+    append("#define stack_ptx_encode_meta_rotate(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_ROTATE, ST)\n")
+    append("#define stack_ptx_encode_meta_reverse(ST)	_STACK_PTX_ENCODE_META(STACK_PTX_META_INSTRUCTION_REVERSE, ST)\n\n")
 
     # Enums: Stack, Arg, PtxInstruction, SpecialRegister
     append("typedef enum {\n")
@@ -376,6 +385,32 @@ def _gen_c_header(
         append(f"    [STACK_PTX_ARG_TYPE_{at['name']}] = {{ {st_idx}, {int(at['num_vec_elems'])} }},\n")
     append("};\n\n")
 
+    append("static const StackPtxPtxInstructionDescriptor stack_ptx_ptx_instruction_descriptors[] = {\n")
+    for ins in spec["instructions"]:
+        ename = _to_ident_upper(ins["name"])
+        args4 = _pad_args([f"STACK_PTX_ARG_TYPE_{a}" for a in ins["args"]], 4, "STACK_PTX_ARG_TYPE_NONE")
+        rets2 = _pad_args([f"STACK_PTX_ARG_TYPE_{r}" for r in ins["rets"]], 2, "STACK_PTX_ARG_TYPE_NONE")
+        stack_reqs = _build_ptx_unique_stack_reqs(spec, ins)
+        append(f"    [STACK_PTX_PTX_INSTRUCTION_{ename}] = {{\n")
+        append(f"        .arg_types = {{ {args4[0]}, {args4[1]}, {args4[2]}, {args4[3]} }},\n")
+        append(f"        .ret_types = {{ {rets2[0]}, {rets2[1]} }},\n")
+        append(f"        .num_unique_stacks = {len(stack_reqs)},\n")
+        append(f"        .is_aligned = {'true' if ins['aligned'] else 'false'},\n")
+        append("        .unique_stacks = {\n")
+        for stack_name, count in stack_reqs:
+            append(f"            {{ STACK_PTX_STACK_TYPE_{stack_name}, {count} }},\n")
+        for _ in range(4 - len(stack_reqs)):
+            append("            { 0, 0 },\n")
+        append("        },\n")
+        append("    },\n")
+    append("};\n\n")
+
+    append("static const StackPtxSpecialRegisterDescriptor stack_ptx_special_register_descriptors[] = {\n")
+    for sr in spec["special_registers"]:
+        ename = _to_ident_upper(sr["display"])
+        append(f"    [STACK_PTX_SPECIAL_REGISTER_{ename}] = {{ STACK_PTX_ARG_TYPE_{sr['arg_type']} }},\n")
+    append("};\n\n")
+
     # Optional: constant encoders per stack type (constant_type)
     for st in spec["stack_types"]:
         constant_type = st.get("constant_type")
@@ -385,8 +420,7 @@ def _gen_c_header(
         lname = _to_ident_lower(st["name"])
         append(f"#define stack_ptx_encode_constant_{lname}(c) {{ \\\n"
                f"    .instruction_type=STACK_PTX_INSTRUCTION_TYPE_CONSTANT, \\\n"
-               f"    .stack_idx=STACK_PTX_STACK_TYPE_{st['name']}, \\\n"
-               f"    .idx=0, \\\n"
+               f"    .aux=STACK_PTX_STACK_TYPE_{st['name']}, \\\n"
                f"    .payload={{.{field}=(c)}} \\\n"
                f"}}\n\n")
 
@@ -396,12 +430,8 @@ def _gen_c_header(
     for ins in spec["instructions"]:
         ename = _to_ident_upper(ins["name"])
         vname = _to_ident_lower(ins["name"])
-        args4 = _pad_args([f"STACK_PTX_ARG_TYPE_{a}" for a in ins["args"]], 4, "STACK_PTX_ARG_TYPE_NONE")
-        rets2 = _pad_args([f"STACK_PTX_ARG_TYPE_{r}" for r in ins["rets"]], 2, "STACK_PTX_ARG_TYPE_NONE")
-        aligned = "1" if ins["aligned"] else "0"
         append(f"static const StackPtxInstruction stack_ptx_encode_ptx_instruction_{vname} = "
-               f"_STACK_PTX_ENCODE_PTX_INSTRUCTION(STACK_PTX_PTX_INSTRUCTION_{ename}, "
-               f"{args4[0]}, {args4[1]}, {args4[2]}, {args4[3]}, {rets2[0]}, {rets2[1]}, {aligned});\n")
+               f"_STACK_PTX_ENCODE_PTX_INSTRUCTION(STACK_PTX_PTX_INSTRUCTION_{ename});\n")
         disp_names.append((ename, ins["display"]))
         ptx_names.append((ename, ins["ptx"]))
     append("\n__attribute__((unused))\nstatic const char* stack_ptx_ptx_instruction_display_names[] = {\n")
@@ -426,8 +456,7 @@ def _gen_c_header(
         ename = _to_ident_upper(sr["display"])
         vname = _to_ident_lower(sr["display"])
         append(f"static const StackPtxInstruction stack_ptx_encode_special_register_{vname} = "
-               f"_STACK_PTX_ENCODE_SPECIAL_REGISTER(STACK_PTX_SPECIAL_REGISTER_{ename}, "
-               f"STACK_PTX_ARG_TYPE_{sr['arg_type']});\n")
+               f"_STACK_PTX_ENCODE_SPECIAL_REGISTER(STACK_PTX_SPECIAL_REGISTER_{ename});\n")
         sr_disp.append((ename, sr["display"]))
         sr_ptx.append((ename, sr["ptx"]))
     append("\n__attribute__((unused))\nstatic const char* stack_ptx_special_register_display_names[] = {\n")
@@ -447,8 +476,10 @@ def _gen_c_header(
     # stack info
     append("static const StackPtxStackInfo stack_ptx_stack_info = {\n")
     append("    .ptx_instruction_strings = stack_ptx_ptx_instruction_ptx_names,\n")
+    append("    .ptx_instruction_descriptors = stack_ptx_ptx_instruction_descriptors,\n")
     append("    .num_ptx_instructions = STACK_PTX_PTX_INSTRUCTION_NUM_ENUMS,\n")
     append("    .special_register_strings = stack_ptx_special_register_ptx_names,\n")
+    append("    .special_register_descriptors = stack_ptx_special_register_descriptors,\n")
     append("    .num_special_registers = STACK_PTX_SPECIAL_REGISTER_NUM_ENUMS,\n")
     append("    .stack_literal_prefixes = stack_ptx_stack_literal_prefixes,\n")
     append("    .num_stacks = STACK_PTX_STACK_TYPE_NUM_ENUMS,\n")
@@ -467,7 +498,6 @@ def _gen_cpp_header(
     spec: Dict[str, Any],
     in_json_path: str
 ) -> str:
-    st_ix, at_ix = _build_indices(spec)
     out: List[str] = []
     a = out.append
     a(f"// Auto-generated by stack_ptx_generate_infos.py on {gen_stamp()}\n")
@@ -509,60 +539,43 @@ def _gen_cpp_header(
     a("""constexpr StackPtxInstruction _encode_return() {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_RETURN;
-    instruction.stack_idx = 0;
-    instruction.idx = 0;
+    instruction.aux = 0;
     instruction.payload.u = 0;
     return instruction;
 }
 
 constexpr StackPtxInstruction _encode_meta(
     StackPtxMetaInstruction meta_instruction,
-    StackType stack_type,
-    uint32_t c
+    StackType stack_type
 ) {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_META;
-    instruction.stack_idx = static_cast<size_t>(stack_type);
-    instruction.idx = static_cast<uint16_t>(meta_instruction);
+    instruction.aux = static_cast<StackPtxStackIdx>(stack_type);
+    instruction.payload.u = static_cast<uint32_t>(meta_instruction);
+    return instruction;
+}
+
+constexpr StackPtxInstruction _encode_meta_constant(uint32_t c) {
+    StackPtxInstruction instruction{};
+    instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_META_CONSTANT;
+    instruction.aux = 0;
     instruction.payload.meta_constant = c;
     return instruction;
 }
 
-constexpr StackPtxInstruction _encode_ptx_instruction(
-    PtxInstruction ptx_instruction,
-    ArgType arg_0,
-    ArgType arg_1,
-    ArgType arg_2,
-    ArgType arg_3,
-    ArgType ret_0,
-    ArgType ret_1,
-    bool is_aligned
-) {
-    StackPtxPTXArgs ptx_args{};
-    ptx_args.arg_0 = static_cast<size_t>(arg_0);
-    ptx_args.arg_1 = static_cast<size_t>(arg_1);
-    ptx_args.arg_2 = static_cast<size_t>(arg_2);
-    ptx_args.arg_3 = static_cast<size_t>(arg_3);
-    ptx_args.ret_0 = static_cast<size_t>(ret_0);
-    ptx_args.ret_1 = static_cast<size_t>(ret_1);
-    ptx_args.flag_is_aligned = is_aligned;
+constexpr StackPtxInstruction _encode_ptx_instruction(PtxInstruction ptx_instruction) {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_PTX;
-    instruction.stack_idx = static_cast<size_t>(StackType::NONE);
-    instruction.idx = static_cast<uint16_t>(ptx_instruction);
-    instruction.payload.ptx_args = ptx_args;
+    instruction.aux = 0;
+    instruction.payload.u = static_cast<uint32_t>(ptx_instruction);
     return instruction;
 }
 
-constexpr StackPtxInstruction _encode_special_register(
-    SpecialRegister special_register,
-    ArgType arg_type
-) {
+constexpr StackPtxInstruction _encode_special_register(SpecialRegister special_register) {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_SPECIAL;
-    instruction.stack_idx = static_cast<size_t>(StackType::NONE);
-    instruction.idx = static_cast<uint16_t>(special_register);
-    instruction.payload.special_arg = static_cast<size_t>(arg_type);
+    instruction.aux = 0;
+    instruction.payload.u = static_cast<uint32_t>(special_register);
     return instruction;
 }
 """)
@@ -575,7 +588,31 @@ constexpr StackPtxInstruction _encode_special_register(
 
     a("static const StackPtxArgTypeInfo arg_type_infos[] = {\n")
     for at in spec["arg_types"]:
-        a(f"    {{ static_cast<size_t>(StackType::{at['stack_type']}), {int(at['num_vec_elems'])} }},\n")
+        a(f"    {{ static_cast<StackPtxStackIdx>(StackType::{at['stack_type']}), {int(at['num_vec_elems'])} }},\n")
+    a("};\n\n")
+
+    a("static const StackPtxPtxInstructionDescriptor ptx_instruction_descriptors[] = {\n")
+    for ins in spec["instructions"]:
+        args4 = _pad_args([f"static_cast<StackPtxArgIdx>(ArgType::{a})" for a in ins["args"]], 4, "static_cast<StackPtxArgIdx>(ArgType::NONE)")
+        rets2 = _pad_args([f"static_cast<StackPtxArgIdx>(ArgType::{r})" for r in ins["rets"]], 2, "static_cast<StackPtxArgIdx>(ArgType::NONE)")
+        stack_reqs = _build_ptx_unique_stack_reqs(spec, ins)
+        a("    {\n")
+        a(f"        {{ {args4[0]}, {args4[1]}, {args4[2]}, {args4[3]} }},\n")
+        a(f"        {{ {rets2[0]}, {rets2[1]} }},\n")
+        a(f"        {len(stack_reqs)},\n")
+        a(f"        {'true' if ins['aligned'] else 'false'},\n")
+        a("        {\n")
+        for stack_name, count in stack_reqs:
+            a(f"            {{ static_cast<StackPtxStackIdx>(StackType::{stack_name}), {count} }},\n")
+        for _ in range(4 - len(stack_reqs)):
+            a("            { 0, 0 },\n")
+        a("        }\n")
+        a("    },\n")
+    a("};\n\n")
+
+    a("static const StackPtxSpecialRegisterDescriptor special_register_descriptors[] = {\n")
+    for sr in spec["special_registers"]:
+        a(f"    {{ static_cast<StackPtxArgIdx>(ArgType::{sr['arg_type']}) }},\n")
     a("};\n\n")
 
     # constant encoders per stack type (constant_type)
@@ -589,59 +626,54 @@ constexpr StackPtxInstruction _encode_special_register(
         a(f"constexpr StackPtxInstruction encode_constant_{lname}({ctype} c) {{\n"
           f"    StackPtxInstruction instruction{{}};\n"
           f"    instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_CONSTANT;\n"
-          f"    instruction.stack_idx = static_cast<size_t>(StackType::{st['name']});\n"
-          f"    instruction.idx = 0;\n"
+          f"    instruction.aux = static_cast<StackPtxStackIdx>(StackType::{st['name']});\n"
           f"    instruction.payload.{field} = c;\n"
           f"    return instruction;\n"
           f"}}\n\n")
 
     # common encoders
-    a("""constexpr StackPtxInstruction encode_input(uint16_t idx) {
+    a("""constexpr StackPtxInstruction encode_input(StackPtxIdx idx) {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_INPUT;
-    instruction.stack_idx = 0;
-    instruction.idx = idx;
-    instruction.payload.u = 0;
+    instruction.aux = 0;
+    instruction.payload.u = idx;
     return instruction;
 }
 
-constexpr StackPtxInstruction encode_routine(uint16_t idx) {
+constexpr StackPtxInstruction encode_routine(StackPtxIdx idx) {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_ROUTINE;
-    instruction.stack_idx = 0;
-    instruction.idx = idx;
-    instruction.payload.u = 0;
+    instruction.aux = 0;
+    instruction.payload.u = idx;
     return instruction;
 }
       
-constexpr StackPtxInstruction encode_store(StackType stack_type, uint16_t idx) {
+constexpr StackPtxInstruction encode_store(StackType stack_type, StackPtxIdx idx) {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_STORE;
-    instruction.stack_idx = static_cast<size_t>(stack_type);
-    instruction.idx = idx;
-    instruction.payload.u = 0;
+    instruction.aux = static_cast<StackPtxStackIdx>(stack_type);
+    instruction.payload.u = idx;
     return instruction;
 }
       
-constexpr StackPtxInstruction encode_load(uint16_t idx) {
+constexpr StackPtxInstruction encode_load(StackPtxIdx idx) {
     StackPtxInstruction instruction{};
     instruction.instruction_type = STACK_PTX_INSTRUCTION_TYPE_LOAD;
-    instruction.stack_idx = 0;
-    instruction.idx = idx;
-    instruction.payload.u = 0;
+    instruction.aux = 0;
+    instruction.payload.u = idx;
     return instruction;
 }
 
-constexpr StackPtxInstruction encode_meta_constant(uint32_t c)              { return _encode_meta(STACK_PTX_META_INSTRUCTION_CONSTANT, StackType::NONE, c); }
-constexpr StackPtxInstruction encode_meta_dup(StackType stack_type)         { return _encode_meta(STACK_PTX_META_INSTRUCTION_DUP, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_yank_dup(StackType stack_type)    { return _encode_meta(STACK_PTX_META_INSTRUCTION_YANK_DUP, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_swap(StackType stack_type)        { return _encode_meta(STACK_PTX_META_INSTRUCTION_SWAP, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_swap_with(StackType stack_type)   { return _encode_meta(STACK_PTX_META_INSTRUCTION_SWAP_WITH, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_replace(StackType stack_type)     { return _encode_meta(STACK_PTX_META_INSTRUCTION_REPLACE, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_drop(StackType stack_type)        { return _encode_meta(STACK_PTX_META_INSTRUCTION_DROP, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_clear(StackType stack_type)       { return _encode_meta(STACK_PTX_META_INSTRUCTION_CLEAR, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_rotate(StackType stack_type)      { return _encode_meta(STACK_PTX_META_INSTRUCTION_ROTATE, stack_type, 0); }
-constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { return _encode_meta(STACK_PTX_META_INSTRUCTION_REVERSE, stack_type, 0); }
+constexpr StackPtxInstruction encode_meta_constant(uint32_t c)              { return _encode_meta_constant(c); }
+constexpr StackPtxInstruction encode_meta_dup(StackType stack_type)         { return _encode_meta(STACK_PTX_META_INSTRUCTION_DUP, stack_type); }
+constexpr StackPtxInstruction encode_meta_yank_dup(StackType stack_type)    { return _encode_meta(STACK_PTX_META_INSTRUCTION_YANK_DUP, stack_type); }
+constexpr StackPtxInstruction encode_meta_swap(StackType stack_type)        { return _encode_meta(STACK_PTX_META_INSTRUCTION_SWAP, stack_type); }
+constexpr StackPtxInstruction encode_meta_swap_with(StackType stack_type)   { return _encode_meta(STACK_PTX_META_INSTRUCTION_SWAP_WITH, stack_type); }
+constexpr StackPtxInstruction encode_meta_replace(StackType stack_type)     { return _encode_meta(STACK_PTX_META_INSTRUCTION_REPLACE, stack_type); }
+constexpr StackPtxInstruction encode_meta_drop(StackType stack_type)        { return _encode_meta(STACK_PTX_META_INSTRUCTION_DROP, stack_type); }
+constexpr StackPtxInstruction encode_meta_clear(StackType stack_type)       { return _encode_meta(STACK_PTX_META_INSTRUCTION_CLEAR, stack_type); }
+constexpr StackPtxInstruction encode_meta_rotate(StackType stack_type)      { return _encode_meta(STACK_PTX_META_INSTRUCTION_ROTATE, stack_type); }
+constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { return _encode_meta(STACK_PTX_META_INSTRUCTION_REVERSE, stack_type); }
 """)
 
     a("static const StackPtxInstruction encode_return = _encode_return();\n\n")
@@ -652,11 +684,7 @@ constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { re
     for ins in spec["instructions"]:
         vname = _to_ident_lower(ins["name"])
         ename = _to_ident_upper(ins["name"])
-        args4 = _pad_args([f"ArgType::{a}" for a in ins["args"]], 4, "ArgType::NONE")
-        rets2 = _pad_args([f"ArgType::{r}" for r in ins["rets"]], 2, "ArgType::NONE")
-        is_aligned = "true" if ins["aligned"] else "false"
-        a(f"static const StackPtxInstruction encode_ptx_instruction_{vname} = _encode_ptx_instruction("
-          f"PtxInstruction::{ename}, {args4[0]}, {args4[1]}, {args4[2]}, {args4[3]}, {rets2[0]}, {rets2[1]}, {is_aligned});\n")
+        a(f"static const StackPtxInstruction encode_ptx_instruction_{vname} = _encode_ptx_instruction(PtxInstruction::{ename});\n")
         disp.append(ins["display"])
         ptxnames.append(ins["ptx"])
     a("\n__attribute__((unused))\nstatic const char* ptx_instruction_display_names[] = {\n")
@@ -678,8 +706,7 @@ constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { re
     for sr in spec["special_registers"]:
         vname = _to_ident_lower(sr["display"])
         ename = _to_ident_upper(sr["display"])
-        a(f"static const StackPtxInstruction encode_special_register_{vname} = _encode_special_register("
-          f"SpecialRegister::{ename}, ArgType::{sr['arg_type']});\n")
+        a(f"static const StackPtxInstruction encode_special_register_{vname} = _encode_special_register(SpecialRegister::{ename});\n")
         sr_disp.append(sr["display"])
         sr_ptx.append(sr["ptx"])
     a("\n__attribute__((unused))\nstatic const char* special_register_display_names[] = {\n")
@@ -698,8 +725,10 @@ constexpr StackPtxInstruction encode_meta_reverse(StackType stack_type)     { re
     # stack info
     a("static const StackPtxStackInfo stack_info = {\n")
     a("    ptx_instruction_ptx_names,\n")
+    a("    ptx_instruction_descriptors,\n")
     a("    static_cast<size_t>(PtxInstruction::NUM_ENUMS),\n")
     a("    special_register_ptx_names,\n")
+    a("    special_register_descriptors,\n")
     a("    static_cast<size_t>(SpecialRegister::NUM_ENUMS),\n")
     a("    stack_literal_prefixes,\n")
     a("    static_cast<size_t>(StackType::NUM_ENUMS),\n")

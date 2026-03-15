@@ -31,13 +31,13 @@
 #define PTX_INJECT_H_INCLUDE
 
 #define PTX_INJECT_VERSION_MAJOR 1 //!< PTX Inject major version.
-#define PTX_INJECT_VERSION_MINOR 0 //!< PTX Inject minor version.
-#define PTX_INJECT_VERSION_PATCH 1 //!< PTX Inject patch version.
+#define PTX_INJECT_VERSION_MINOR 1 //!< PTX Inject minor version.
+#define PTX_INJECT_VERSION_PATCH 0 //!< PTX Inject patch version.
 
 /**
- * \brief String representation of the PTX Inject library version (e.g., "1.0.1").
+ * \brief String representation of the PTX Inject library version (e.g., "1.1.0").
  */
-#define PTX_INJECT_VERSION_STRING "1.0.1"
+#define PTX_INJECT_VERSION_STRING "1.1.0"
 
 #define PTX_INJECT_VERSION (PTX_INJECT_VERSION_MAJOR * 10000 + PTX_INJECT_VERSION_MINOR * 100 + PTX_INJECT_VERSION_PATCH)
 
@@ -772,7 +772,8 @@ _ptx_inject_create(
                 _PTX_INJECT_ERROR( PTX_INJECT_ERROR_MAX_UNIQUE_INJECTS_EXCEEDED );
             }
             size_t unique_inject_idx = num_unique_injects++;
-            const char* local_names_blob = ptx_inject->names_blob + names_blob_bytes_written;
+            const char* local_names_blob =
+                ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
             _PTX_INJECT_CHECK_RET(
                 _ptx_inject_snprintf_append(
                     ptx_inject->names_blob,
@@ -867,11 +868,14 @@ _ptx_inject_create(
                 }
                 src_ptr++;
                 break;
-            }
+	            }
 
-            if (!is_unique) {
-                if (unique_inject_site->args != NULL) {
-                    PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
+	            if (!is_unique) {
+	                if (arg_num >= unique_inject_site->num_args) {
+	                    _PTX_INJECT_ERROR( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
+	                }
+	                if (unique_inject_site->args != NULL) {
+	                    PtxInjectInjectionArg* args = &unique_inject_site->args[arg_num];
 
                     if (argument_name_length != strlen(args->name)) 
                         _PTX_INJECT_CHECK_RET( PTX_INJECT_ERROR_INCONSISTENT_INJECTION );
@@ -899,7 +903,8 @@ _ptx_inject_create(
             } else {
                 num_unique_inject_args++;
                 unique_inject_site->num_args++;
-                const char* name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
@@ -911,7 +916,8 @@ _ptx_inject_create(
                         '\0'
                     )
                 );
-                const char* register_name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* register_name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
@@ -923,7 +929,8 @@ _ptx_inject_create(
                         '\0'
                     )
                 );
-                const char* register_type_name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* register_type_name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
@@ -935,7 +942,8 @@ _ptx_inject_create(
                         '\0'
                     )
                 );
-                const char* data_type_name = ptx_inject->names_blob + names_blob_bytes_written;
+                const char* data_type_name =
+                    ptx_inject->names_blob == NULL ? NULL : ptx_inject->names_blob + names_blob_bytes_written;
                 _PTX_INJECT_CHECK_RET(
                     _ptx_inject_snprintf_append(
                         ptx_inject->names_blob,
