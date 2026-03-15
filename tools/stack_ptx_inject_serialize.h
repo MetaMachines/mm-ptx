@@ -26,13 +26,13 @@
 #define STACK_PTX_INJECT_SERIALIZE_H_INCLUDE
 
 #define STACK_PTX_INJECT_SERIALIZE_VERSION_MAJOR 1 //!< PTX Inject major version.
-#define STACK_PTX_INJECT_SERIALIZE_VERSION_MINOR 0 //!< PTX Inject minor version.
+#define STACK_PTX_INJECT_SERIALIZE_VERSION_MINOR 1 //!< PTX Inject minor version.
 #define STACK_PTX_INJECT_SERIALIZE_VERSION_PATCH 0 //!< PTX Inject patch version.
 
 /**
- * \brief String representation of the PTX Inject library version (e.g., "1.0.0").
+ * \brief String representation of the PTX Inject library version (e.g., "1.1.0").
  */
-#define STACK_PTX_INJECT_SERIALIZE_VERSION_STRING "1.0.0"
+#define STACK_PTX_INJECT_SERIALIZE_VERSION_STRING "1.1.0"
 
 #define STACK_PTX_INJECT_SERIALIZE_VERSION (STACK_PTX_INJECT_SERIALIZE_VERSION_MAJOR * 10000 + STACK_PTX_INJECT_SERIALIZE_VERSION_MINOR * 100 + STACK_PTX_INJECT_SERIALIZE_VERSION_PATCH)
 

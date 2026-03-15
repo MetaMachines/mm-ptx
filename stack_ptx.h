@@ -31,13 +31,13 @@
 #define STACK_PTX_H_INCLUDE
 
 #define STACK_PTX_VERSION_MAJOR 1 //!< Stack PTX major version.
-#define STACK_PTX_VERSION_MINOR 0 //!< Stack PTX minor version.
-#define STACK_PTX_VERSION_PATCH 1 //!< Stack PTX patch version.
+#define STACK_PTX_VERSION_MINOR 1 //!< Stack PTX minor version.
+#define STACK_PTX_VERSION_PATCH 0 //!< Stack PTX patch version.
 
 /**
- * \brief String representation of the Stack PTX library version (e.g., "1.0.1").
+ * \brief String representation of the Stack PTX library version (e.g., "1.1.0").
  */
-#define STACK_PTX_VERSION_STRING "1.0.1"
+#define STACK_PTX_VERSION_STRING "1.1.0"
 
 #define STACK_PTX_VERSION (STACK_PTX_VERSION_MAJOR * 10000 + STACK_PTX_VERSION_MINOR * 100 + STACK_PTX_VERSION_PATCH)
 
