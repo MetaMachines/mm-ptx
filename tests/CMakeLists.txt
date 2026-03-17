@@ -100,6 +100,32 @@ add_test(
     COMMAND stack_ptx_zero_frame_depth_empty_string_tests
 )
 
+add_executable(stack_ptx_meta_dup_empty_stack_tests test_stack_ptx_meta_dup_empty_stack.c)
+target_link_libraries(
+    stack_ptx_meta_dup_empty_stack_tests
+    PRIVATE
+    mm_ptx_headers
+    mm_ptx_common
+)
+
+add_test(
+    NAME mm_ptx.stack_ptx_meta_dup_empty_stack
+    COMMAND stack_ptx_meta_dup_empty_stack_tests
+)
+
+add_executable(stack_ptx_meta_reverse_empty_stack_tests test_stack_ptx_meta_reverse_empty_stack.c)
+target_link_libraries(
+    stack_ptx_meta_reverse_empty_stack_tests
+    PRIVATE
+    mm_ptx_headers
+    mm_ptx_common
+)
+
+add_test(
+    NAME mm_ptx.stack_ptx_meta_reverse_empty_stack
+    COMMAND stack_ptx_meta_reverse_empty_stack_tests
+)
+
 set(STACK_PTX_INJECT_00_SIMPLE_KERNEL "${PTX_INJECT_00_SIMPLE_KERNEL}")
 set(STACK_PTX_INJECT_00_SIMPLE_KERNEL_TARGET "mm_ptx_test_stack_ptx_inject_00_simple_kernel_ptx")
 

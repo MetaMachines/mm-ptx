@@ -32,12 +32,12 @@
 
 #define STACK_PTX_VERSION_MAJOR 1 //!< Stack PTX major version.
 #define STACK_PTX_VERSION_MINOR 1 //!< Stack PTX minor version.
-#define STACK_PTX_VERSION_PATCH 0 //!< Stack PTX patch version.
+#define STACK_PTX_VERSION_PATCH 1 //!< Stack PTX patch version.
 
 /**
- * \brief String representation of the Stack PTX library version (e.g., "1.1.0").
+ * \brief String representation of the Stack PTX library version (e.g., "1.1.1").
  */
-#define STACK_PTX_VERSION_STRING "1.1.0"
+#define STACK_PTX_VERSION_STRING "1.1.1"
 
 #define STACK_PTX_VERSION (STACK_PTX_VERSION_MAJOR * 10000 + STACK_PTX_VERSION_MINOR * 100 + STACK_PTX_VERSION_PATCH)
 
@@ -1005,15 +1005,15 @@ _stack_ptx_ast_run_meta(
 	StackPtxStackPtr* const stack_ptr = &compiler->stack_ptrs[stack_idx];
 	StackPtxAstIdx* stack = &compiler->stacks[stack_idx * compiler->compiler_info.stack_size];
 
-	switch(meta_idx) {
-		case STACK_PTX_META_INSTRUCTION_DUP: {
-			// Duplicate the register at the top of the respective stack
-			if ((*stack_ptr) < compiler->compiler_info.stack_size) {
-				StackPtxAstIdx ast_idx = stack[(*stack_ptr)-1];
-				stack[(*stack_ptr)++] = ast_idx;
-			}
-			return STACK_PTX_SUCCESS;
-		};
+		switch(meta_idx) {
+			case STACK_PTX_META_INSTRUCTION_DUP: {
+				// Duplicate the register at the top of the respective stack
+				if ((*stack_ptr) > 0 && (*stack_ptr) < compiler->compiler_info.stack_size) {
+					StackPtxAstIdx ast_idx = stack[(*stack_ptr)-1];
+					stack[(*stack_ptr)++] = ast_idx;
+				}
+				return STACK_PTX_SUCCESS;
+			};
 		case STACK_PTX_META_INSTRUCTION_YANK_DUP: {
 			if ((*meta_stack_ptr) > 0) {
 				StackPtxMetaConstant depth = meta_stack[--(*meta_stack_ptr)];
@@ -1089,6 +1089,9 @@ _stack_ptx_ast_run_meta(
 			return STACK_PTX_SUCCESS;
 		};
 		case STACK_PTX_META_INSTRUCTION_REVERSE: {
+			if ((*stack_ptr) == 0) {
+				return STACK_PTX_SUCCESS;
+			}
 			size_t start = 0;
 			size_t end = (*stack_ptr) - 1;
 			StackPtxAstIdx temp;
