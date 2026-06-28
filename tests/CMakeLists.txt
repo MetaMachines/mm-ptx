@@ -126,6 +126,57 @@ add_test(
     COMMAND stack_ptx_meta_reverse_empty_stack_tests
 )
 
+add_executable(ast_ptx_expected_output_tests test_ast_ptx_expected_output.c)
+target_link_libraries(
+    ast_ptx_expected_output_tests
+    PRIVATE
+    m
+    mm_ptx_headers
+    mm_ptx_common
+)
+
+add_test(
+    NAME mm_ptx.ast_ptx_expected_output
+    COMMAND ast_ptx_expected_output_tests
+)
+
+add_executable(ast_ptx_cpp_tests test_ast_ptx_cpp.cpp)
+target_link_libraries(
+    ast_ptx_cpp_tests
+    PRIVATE
+    m
+    mm_ptx_headers
+    mm_ptx_common
+)
+
+add_test(
+    NAME mm_ptx.ast_ptx_cpp
+    COMMAND ast_ptx_cpp_tests
+)
+
+add_executable(ast_ptx_inject_00_simple_tests test_ast_ptx_inject_00_simple.c)
+add_dependencies(ast_ptx_inject_00_simple_tests ptx_inject_00_simple_kernel_ptx_file)
+set_source_files_properties(
+    test_ast_ptx_inject_00_simple.c
+    PROPERTIES
+    OBJECT_DEPENDS "${PTX_INJECT_00_SIMPLE_KERNEL_PTX}"
+)
+target_compile_definitions(ast_ptx_inject_00_simple_tests PRIVATE PTX_KERNEL="${PTX_INJECT_00_SIMPLE_KERNEL_PTX}")
+
+target_link_libraries(
+    ast_ptx_inject_00_simple_tests
+    PRIVATE
+    CUDA::cuda_driver
+    CUDA::nvrtc
+    CUDA::nvptxcompiler_static
+    m
+    mm_ptx_headers
+    mm_ptx_common
+)
+
+add_test(NAME mm_ptx.ast_ptx_inject_00_simple COMMAND ast_ptx_inject_00_simple_tests)
+set_tests_properties(mm_ptx.ast_ptx_inject_00_simple PROPERTIES SKIP_RETURN_CODE 77)
+
 set(STACK_PTX_INJECT_00_SIMPLE_KERNEL "${PTX_INJECT_00_SIMPLE_KERNEL}")
 set(STACK_PTX_INJECT_00_SIMPLE_KERNEL_TARGET "mm_ptx_test_stack_ptx_inject_00_simple_kernel_ptx")
 

@@ -1,13 +1,14 @@
 # MetaMachines
-> mm-ptx: PTX Inject and Stack PTX
+> mm-ptx: PTX Inject, Stack PTX, and AST PTX
 
 ## Overview
-mm-ptx provides two header-only libraries for working with PTX:
+mm-ptx provides header-only C APIs for working with PTX:
 
 - Stack PTX: a stack-machine instruction language that compiles to valid PTX. It is intended for programmatic generation, mutation, and fast iteration.
+- AST PTX: a smaller postorder AST instruction compiler for cases where the upstream system already has an expression tree that yields one f32 value.
 - PTX Inject: a CUDA annotation and parsing system that assigns stable PTX register names to variables, then lets you inject custom PTX stubs into compiled PTX.
 
-Both libraries are C99 compliant and live in single headers (`stack_ptx.h` and `ptx_inject.h`). CUDA toolchains are only required when compiling and running kernels.
+The main APIs are C99 compliant and live in headers (`stack_ptx.h`, `ast_ptx.h`, and `ptx_inject.h`). CUDA toolchains are only required when compiling and running kernels.
 
 ## PTX Inject: what you write
 Mark a site in CUDA with macros:
@@ -126,6 +127,7 @@ This yields a PTX stub you can pass to `ptx_inject_render_ptx`. For a complete r
 
 ## Guides
 - Stack PTX guide: [STACK_PTX.md](STACK_PTX.md)
+- AST PTX guide: [AST_PTX.md](AST_PTX.md)
 - PTX Inject guide: [PTX_INJECT.md](PTX_INJECT.md)
 - Stack PTX examples: [examples/stack_ptx/README.md](examples/stack_ptx/README.md)
 - Stack PTX + PTX Inject examples: [examples/stack_ptx_inject/README.md](examples/stack_ptx_inject/README.md)
