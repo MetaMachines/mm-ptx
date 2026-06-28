@@ -10,8 +10,8 @@ mm-ptx provides header-only C APIs for working with PTX:
 
 The main APIs are C99 compliant and live in headers (`stack_ptx.h`, `ast_ptx.h`, and `ptx_inject.h`). CUDA toolchains are only required when compiling and running kernels.
 
-## PTX Inject: what you write
-Mark a site in CUDA with macros:
+## PTX Inject: CUDA augmentation
+Mark a replacement site in CUDA:
 ```c++
 #include <ptx_inject.h>
 
@@ -21,83 +21,24 @@ void kernel(float* out) {
     float x = 5.0f;
     float y = 3.0f;
     float z = 0.0f;
+
     PTX_INJECT("func",
-        PTX_IN (F32, x, x),
-        PTX_MOD(F32, y, y),
-        PTX_OUT(F32, z, z)
+        PTX_IN (F32, x),
+        PTX_IN (F32, y),
+        PTX_OUT(F32, z)
     );
+
     out[0] = z;
 }
 ```
 
-Compile the CUDA to PTX (nvcc or nvrtc), then use the host-side API to inject a stub:
-```c
-#include <ptx_inject.h>
-#include <stdio.h>
-#include <stdlib.h>
+`PTX_INJECT` is the readable annotation path. Runtime CUDA template generators can emit equivalent inline asm directly, which avoids the macro expansion cost while preserving the same marker contract. Generated PTX stubs from Stack PTX or AST PTX can be inserted at the `func` site.
 
-const char* annotated_ptx = "..."; // PTX from nvcc/nvrtc
-
-PtxInjectHandle inject;
-ptx_inject_create(&inject, annotated_ptx);
-
-size_t inject_idx = 0;
-ptx_inject_inject_info_by_name(inject, "func", &inject_idx, NULL, NULL);
-
-const char* reg_x = NULL;
-const char* reg_y = NULL;
-const char* reg_z = NULL;
-ptx_inject_variable_info_by_name(inject, inject_idx, "x", NULL, &reg_x, NULL, NULL, NULL);
-ptx_inject_variable_info_by_name(inject, inject_idx, "y", NULL, &reg_y, NULL, NULL, NULL);
-ptx_inject_variable_info_by_name(inject, inject_idx, "z", NULL, &reg_z, NULL, NULL, NULL);
-
-char stub[256];
-snprintf(
-    stub,
-    sizeof(stub),
-    "\tadd.ftz.f32 %%%2$s, %%%1$s, %%%2$s;\n"
-    "\tadd.ftz.f32 %%%3$s, %%%1$s, %%%2$s;",
-    reg_x, reg_y, reg_z
-);
-
-size_t num_injects = 0;
-ptx_inject_num_injects(inject, &num_injects);
-
-const char** stubs = (const char**)calloc(num_injects, sizeof(char*));
-stubs[inject_idx] = stub;
-
-size_t out_size = 0;
-ptx_inject_render_ptx(inject, stubs, num_injects, NULL, 0, &out_size);
-
-char* out_buffer = (char*)malloc(out_size + 1);
-size_t bytes_written = 0;
-ptx_inject_render_ptx(inject, stubs, num_injects, out_buffer, out_size + 1, &bytes_written);
-
-free(out_buffer);
-free(stubs);
-ptx_inject_destroy(inject);
-```
-
-This would be equivalent to writing this CUDA kernel directly but without the CUDA to PTX compilation overhead:
-```c++
-extern "C"
-__global__
-void kernel(float* out) {
-    float x = 5.0f;
-    float y = 3.0f;
-    float z = 0.0f;
-    y = x + y;
-    z = x + y;
-    out[0] = z;
-}
-```
-
-## Stack PTX: stack-based instruction compiler
-If you do not want to hand-write PTX, you can use Stack PTX to generate the stub:
+## Stack PTX: stack program to PTX stub
+Stack PTX is useful when generated programs should remain valid after instruction insertion, deletion, or mutation:
 ```c
 #include <stack_ptx.h>
 #include <stack_ptx_default_info.h>
-// Generated from examples/type_descriptions/stack_ptx_descriptions.json
 #include "generated/stack_ptx_descriptions.h"
 
 enum { REG_X, REG_Y, REG_Z, REG_COUNT };
@@ -111,19 +52,69 @@ static const StackPtxRegister registers[] = {
 static const StackPtxInstruction instructions[] = {
     stack_ptx_encode_input(REG_X),
     stack_ptx_encode_input(REG_Y),
-    stack_ptx_encode_ptx_instruction_add_ftz_f32,
-    stack_ptx_encode_input(REG_X),
+    stack_ptx_encode_ptx_instruction_mul_ftz_f32,
+    stack_ptx_encode_constant_f32(1.0f),
     stack_ptx_encode_ptx_instruction_add_ftz_f32,
     stack_ptx_encode_return
 };
 
 static const size_t requests[] = { REG_Z };
 
-// Measure output size, allocate buffers, then compile.
+// Measure workspace and output size, allocate buffers, then compile.
 stack_ptx_compile(...);
 ```
 
-This yields a PTX stub you can pass to `ptx_inject_render_ptx`. For a complete runnable example, see [examples/stack_ptx/00_simple/main.c](examples/stack_ptx/00_simple/main.c) and [examples/stack_ptx_inject/00_simple/main.c](examples/stack_ptx_inject/00_simple/main.c).
+The register names are the same logical names used by the CUDA injection site. Stack PTX takes bare names such as `"x"` and emits PTX registers such as `%x`:
+
+```ptx
+{
+.reg .f32 %_s0_<2>;
+mul.ftz.f32 %_s0_0, %x, %y;
+add.ftz.f32 %_s0_1, %_s0_0, 0f3F800000;
+mov.f32 %z, %_s0_1;
+}
+```
+
+## AST PTX: postorder AST to PTX stub
+AST PTX is smaller when an upstream system already has an expression tree that yields one f32 value:
+
+```c
+#include <ast_ptx.h>
+#include <ast_ptx_instructions.h>
+
+enum { INPUT_X, INPUT_Y, INPUT_COUNT };
+
+const char output_register_name[] = "%z";
+const char* const input_register_names[INPUT_COUNT] = {
+    [INPUT_X] = "%x",
+    [INPUT_Y] = "%y",
+};
+
+static const AstPtxInstruction program[] = {
+    ast_ptx_encode_input(INPUT_X),
+    ast_ptx_encode_input(INPUT_Y),
+    ast_ptx_encode_ptx_instruction_mul_ftz_f32,
+    ast_ptx_encode_constant(1.0f),
+    ast_ptx_encode_ptx_instruction_add_ftz_f32,
+    ast_ptx_encode_return
+};
+
+// Measure output size, allocate the buffer, then compile.
+ast_ptx_compile(...);
+```
+
+This emits the same expression with AST PTX temporaries:
+
+```ptx
+{
+.reg .f32 %ast<2>;
+mul.ftz.f32 %ast0, %x, %y;
+add.ftz.f32 %ast1, %ast0, 0f3f800000;
+mov.f32 %z, %ast1;
+}
+```
+
+The Stack PTX and AST PTX outputs are PTX stubs. They can be inserted with PTX Inject or embedded directly in generated inline asm.
 
 ## Guides
 - Stack PTX guide: [STACK_PTX.md](STACK_PTX.md)
@@ -133,32 +124,8 @@ This yields a PTX stub you can pass to `ptx_inject_render_ptx`. For a complete r
 - Stack PTX + PTX Inject examples: [examples/stack_ptx_inject/README.md](examples/stack_ptx_inject/README.md)
 - PTX Inject example code: [examples/ptx_inject](examples/ptx_inject)
 
-## Roadmap
-- **OpenMP parallel compile**
-  - Demonstrate embarrassingly parallel CPU compilation with OpenMP.
-  - Show microsecond-scale Stack PTX stub generation and injection.
-  - Do PTX-to-cubin via the nvPTXCompiler static library (No blocking driver compilation).
-  - Single core is already up to 25x faster PTX-to-cubin than CUDA-to-cubin on the CuTe GEMM example. With this setup Multicore scales linearly.
-- **Networked compile workers**
-  - Send Stack PTX stubs over the network to Mac mini machines running Lima containers using nng.
-  - Leverage driver-free nvPTXCompiler to compile on low-cost ARM servers with no Nvidia hardware.
-  - Fixed-width 8-byte instruction format keeps payloads small after setup, and the cubin is the only returned artifact.
-- **Evolutionary search / packed injects**
-  - Demonstrate Map-Elites–style evolution of Stack PTX instruction sequences.
-  - Pack hundreds or thousands of injection sites per kernel to amortize cuLoadModuleDataEx and launch overhead.
-- **In-The-Loop-Learning (ITLL) system**
-    - Closes the optimization loop: when kernel compilation takes microseconds and execution takes microseconds-to-milliseconds, your ML model must operate on the same time horizon or become the bottleneck.
-    - Training and inference on the order of microseconds per batch enables real-time kernel optimization—not batch processing overnight.
-    - Use cases: learned fitness predictors for evolutionary search, behavioral descriptors for MAP-Elites, online feature extraction from kernel executions, latent representations of kernel behavior.
-    - Built for small data (500-10,000 rows) with batch sizes in the tens of thousands.
-    - Custom allocator for perfect memory usage.
-    - Written in c99 with C++ RAII wrapper.
-
-## Community & Support
-We're here to help with your projects and answer questions:
-- **Discord**: Join our community at https://discord.gg/7vS5XQ4bE4 for direct support, discussions, and collaboration.
-- **Twitter/X**: Follow [@_metamachines](https://x.com/_metamachines) for updates and announcements.
-- **Email**: Reach us at contact@metamachines.co
+## Contact
+contact@metamachines.co
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
