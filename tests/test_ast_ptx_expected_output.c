@@ -93,14 +93,14 @@ main(void) {
         "}";
 
     const char* const input_register_names[] = {
-        "%x",
-        "%y"
+        "x",
+        "y"
     };
 
     size_t measured_bytes = 0u;
     astPtxCheck(
         ast_ptx_compile(
-            "%z",
+            "z",
             input_register_names,
             2u,
             ast_ptx_ptx_instruction_names,
@@ -121,7 +121,7 @@ main(void) {
     size_t rendered_bytes = 0u;
     astPtxCheck(
         ast_ptx_compile(
-            "%z",
+            "z",
             input_register_names,
             2u,
             ast_ptx_ptx_instruction_names,
@@ -147,7 +147,7 @@ main(void) {
     size_t measured_constant_bytes = 0u;
     astPtxCheck(
         ast_ptx_compile(
-            "%z",
+            "z",
             NULL,
             0u,
             ast_ptx_ptx_instruction_names,
@@ -168,7 +168,7 @@ main(void) {
     size_t rendered_constant_bytes = 0u;
     astPtxCheck(
         ast_ptx_compile(
-            "%z",
+            "z",
             NULL,
             0u,
             ast_ptx_ptx_instruction_names,
@@ -188,7 +188,7 @@ main(void) {
 
     ASSERT(
         ast_ptx_compile(
-            "%z",
+            "z",
             NULL,
             0u,
             ast_ptx_ptx_instruction_names,
@@ -205,7 +205,7 @@ main(void) {
 
     ASSERT(
         ast_ptx_compile(
-            "%z",
+            "z",
             NULL,
             0u,
             ast_ptx_ptx_instruction_names,
@@ -222,7 +222,7 @@ main(void) {
 
     ASSERT(
         ast_ptx_compile(
-            "%z",
+            "z",
             NULL,
             0u,
             ast_ptx_ptx_instruction_names,

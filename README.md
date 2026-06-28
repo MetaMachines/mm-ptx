@@ -84,10 +84,11 @@ AST PTX is smaller when an upstream system already has an expression tree that y
 
 enum { INPUT_X, INPUT_Y, INPUT_COUNT };
 
-const char output_register_name[] = "%z";
+// Bare names: AST PTX emits the leading percent sign in generated PTX.
+const char output_register_name[] = "z";
 const char* const input_register_names[INPUT_COUNT] = {
-    [INPUT_X] = "%x",
-    [INPUT_Y] = "%y",
+    [INPUT_X] = "x",
+    [INPUT_Y] = "y",
 };
 
 static const AstPtxInstruction program[] = {

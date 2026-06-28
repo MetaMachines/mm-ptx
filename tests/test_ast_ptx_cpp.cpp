@@ -58,14 +58,14 @@ main() {
         "}";
 
     const char* const input_register_names[] = {
-        "%x",
-        "%y"
+        "x",
+        "y"
     };
 
     size_t measured_bytes = 0u;
     astPtxCheck(
         ast_ptx_compile(
-            "%z",
+            "z",
             input_register_names,
             2u,
             ast_ptx_ptx_instruction_names,
@@ -86,7 +86,7 @@ main() {
     size_t rendered_bytes = 0u;
     astPtxCheck(
         ast_ptx_compile(
-            "%z",
+            "z",
             input_register_names,
             2u,
             ast_ptx_ptx_instruction_names,

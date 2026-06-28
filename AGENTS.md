@@ -16,7 +16,7 @@ This repo is optimized for generated PTX workflows. Keep public docs short for h
 - Keep `README.md` human-first: overview, one CUDA augmentation example, one Stack PTX stub example, one AST PTX stub example, and links.
 - Put API details in `STACK_PTX.md`, `AST_PTX.md`, and `PTX_INJECT.md`.
 - Put agent-facing invariants here instead of expanding the README.
-- When docs mention generated PTX register names, distinguish bare Stack PTX register names such as `"x"` from full AST PTX register strings such as `"%x"`.
+- When docs mention generated PTX register names, distinguish bare API register names such as `"x"` from emitted PTX register names such as `%x`.
 
 ## PTX Inject Contract
 

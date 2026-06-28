@@ -165,8 +165,8 @@ typedef struct AST_PTX_PACKED {
 /**
  * \brief Compiles a postorder AST instruction array into PTX.
  *
- * \param[in] output_register_name PTX register name receiving the top-level result.
- * \param[in] input_register_names PTX register names indexed by INPUT instructions.
+ * \param[in] output_register_name Bare PTX register name receiving the top-level result, without a leading percent sign.
+ * \param[in] input_register_names Bare PTX register names indexed by INPUT instructions, without leading percent signs.
  * \param[in] num_input_registers Number of entries in input_register_names.
  * \param[in] ptx_instruction_names PTX instruction strings indexed by PTX instruction encodes.
  * \param[in] ptx_instruction_num_args Expected f32 argument counts indexed by PTX instruction encodes.
@@ -331,7 +331,7 @@ _ast_ptx_write_value(
                         buffer,
                         buffer_size,
                         buffer_bytes_written_ret,
-                        "%s",
+                        "%%%s",
                         input_register_names[value->payload.idx]
                     )
                 );
@@ -700,7 +700,7 @@ _ast_ptx_compile_frame(
                         buffer,
                         buffer_size,
                         buffer_bytes_written_ret,
-                        "mov.f32 %s, ",
+                        "mov.f32 %%%s, ",
                         output_register_name
                     )
                 );

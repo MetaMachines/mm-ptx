@@ -32,8 +32,10 @@ static const AstPtxInstruction program[] = {
 Use the usual measure-and-allocate flow:
 
 ```c
+const char* const inputs[] = { "x", "y" }; /* Bare names; AST PTX emits `%`. */
+
 size_t required = 0;
-ast_ptx_compile("%z", inputs, 2,
+ast_ptx_compile("z", inputs, 2,
                 ast_ptx_ptx_instruction_names,
                 ast_ptx_ptx_instruction_num_args,
                 AST_PTX_PTX_INSTRUCTION_NUM_ENUMS,
@@ -42,7 +44,7 @@ ast_ptx_compile("%z", inputs, 2,
                 NULL, 0, &required);
 
 char* stub = malloc(required + 1);
-ast_ptx_compile("%z", inputs, 2,
+ast_ptx_compile("z", inputs, 2,
                 ast_ptx_ptx_instruction_names,
                 ast_ptx_ptx_instruction_num_args,
                 AST_PTX_PTX_INSTRUCTION_NUM_ENUMS,

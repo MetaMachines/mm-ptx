@@ -26,7 +26,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 INCTXT(annotated_ptx, PTX_KERNEL);
 
@@ -77,18 +76,6 @@ has_cuda_device(void) {
     }
 
     return count > 0;
-}
-
-static
-char*
-copy_percent_register_name(const char* register_name) {
-    const size_t register_name_len = strlen(register_name);
-    char* out = (char*)malloc(register_name_len + 2u);
-    ASSERT(out != NULL);
-
-    out[0] = '%';
-    memcpy(out + 1u, register_name, register_name_len + 1u);
-    return out;
 }
 
 static
@@ -302,15 +289,11 @@ main(void) {
         )
     );
 
-    char* ast_register_name_x = copy_percent_register_name(register_name_x);
-    char* ast_register_name_y = copy_percent_register_name(register_name_y);
-    char* ast_register_name_z = copy_percent_register_name(register_name_z);
-
     char* ast_stub =
         compile_ast_stub(
-            ast_register_name_z,
-            ast_register_name_x,
-            ast_register_name_y
+            register_name_z,
+            register_name_x,
+            register_name_y
         );
 
     cuCheck( cuInit(0) );
@@ -347,9 +330,6 @@ main(void) {
     ptxInjectCheck( ptx_inject_destroy(ptx_inject) );
 
     free(ast_stub);
-    free(ast_register_name_z);
-    free(ast_register_name_y);
-    free(ast_register_name_x);
 
     ASSERT(fabsf(ast_gpu_result - interpreted) <= 1.0e-5f);
     ASSERT(fabsf(ast_gpu_result - 16.0f) <= 1.0e-5f);
